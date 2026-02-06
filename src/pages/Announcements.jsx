@@ -1,363 +1,327 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
-  Box, Card, CardContent, Typography, Grid, Tabs, Tab, IconButton, TextField, Button, Dialog, DialogTitle, DialogContent, DialogActions,
-  Chip, Avatar, Fade, Collapse, Snackbar, Alert, Tooltip, Badge, Divider, Switch, FormControlLabel, List, ListItem, ListItemAvatar, ListItemText,
-  InputAdornment, Menu, MenuItem, Slide, useTheme, useMediaQuery
+  Box, Card, CardContent, Typography, Button, Chip, Avatar, Grid,
+  IconButton, Dialog, DialogTitle, DialogContent, Tabs, Tab,
+  List, ListItem, ListItemAvatar, ListItemText, Divider, Tooltip,
+  TextField, InputAdornment, Badge, Collapse, Snackbar, Alert
 } from '@mui/material';
 import {
-  Star, StarBorder, Edit, Delete, Add, Info, Close, Archive, PushPin, ThumbUp, ThumbDown, AttachFile, Image, MoreVert, NotificationsActive
+  Notifications, PushPin, Star, StarBorder, Search, FilterList,
+  Schedule, ExpandMore, ExpandLess, AttachFile, Comment, Share,
+  Campaign, Info, Warning, Event, Close, Add
 } from '@mui/icons-material';
 
-const initialAnnouncements = [
+const announcements = [
   {
     id: 1,
-    title: 'Havuz Bakımı',
-    date: '2 gün önce',
-    content: '1-3 Aralık arası havuz kapalı olacak.',
-    category: 'Bakım',
-    author: 'Yönetici',
-    favorite: false,
+    title: 'Havuz Bakımı Duyurusu',
+    content: 'Değerli sakinlerimiz, 1-3 Aralık tarihleri arasında yıllık bakım çalışmaları nedeniyle havuz kapalı olacaktır. Anlayışınız için teşekkür ederiz.',
+    date: '28 Kasım 2024',
+    type: 'warning',
     pinned: true,
-    archived: false,
-    importance: 'Yüksek',
-    tags: ['Bakım', 'Havuz'],
-    views: 12,
-    likes: 3,
-    dislikes: 0,
-    attachments: [],
-    comments: [
-      { user: 'Ali', text: 'Teşekkürler bilgi için!', date: '1 gün önce' },
-      { user: 'Ayşe', text: 'Bakım ne zaman bitecek?', date: '1 gün önce' }
-    ]
+    starred: true,
+    author: 'Yönetim',
+    comments: 5,
+    attachments: 1,
   },
   {
     id: 2,
-    title: 'Yeni Otopark Kuralları',
-    date: '1 hafta önce',
-    content: '1 Aralık’tan itibaren tüm araçlarda otopark etiketi zorunlu.',
-    category: 'Kural',
-    author: 'Yönetici',
-    favorite: true,
+    title: 'Yeni Yıl Etkinliği',
+    content: 'Yeni yıl kutlaması 31 Aralık akşamı ortak alanda düzenlenecektir. Tüm sakinlerimiz davetlidir!',
+    date: '25 Kasım 2024',
+    type: 'event',
     pinned: false,
-    archived: false,
-    importance: 'Orta',
-    tags: ['Otopark', 'Kural'],
-    views: 8,
-    likes: 1,
-    dislikes: 1,
-    attachments: [],
-    comments: []
-  }
+    starred: false,
+    author: 'Sosyal Komite',
+    comments: 12,
+    attachments: 0,
+  },
+  {
+    id: 3,
+    title: 'Aidat Artışı Hakkında',
+    content: '2025 yılı için aidat tutarları %15 oranında artırılmıştır. Detaylı bilgi için yönetim ofisini ziyaret edebilirsiniz.',
+    date: '20 Kasım 2024',
+    type: 'info',
+    pinned: false,
+    starred: true,
+    author: 'Yönetim',
+    comments: 23,
+    attachments: 2,
+  },
+  {
+    id: 4,
+    title: 'Asansör Bakımı',
+    content: 'A Blok asansörü 30 Kasım Cumartesi günü 09:00-17:00 saatleri arasında bakıma alınacaktır.',
+    date: '18 Kasım 2024',
+    type: 'warning',
+    pinned: false,
+    starred: false,
+    author: 'Teknik Ekip',
+    comments: 3,
+    attachments: 0,
+  },
 ];
-
-const categories = ['Tümü', 'Bakım', 'Kural', 'Finans', 'Etkinlik'];
-const importanceLevels = ['Düşük', 'Orta', 'Yüksek'];
-const themeOptions = ['light', 'dark'];
 
 const Announcements = () => {
   const [tab, setTab] = useState(0);
-  const [search, setSearch] = useState('');
-  const [announcements, setAnnouncements] = useState(initialAnnouncements);
-  const [selected, setSelected] = useState(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editMode, setEditMode] = useState(false);
+  const [expandedId, setExpandedId] = useState(null);
+  const [starred, setStarred] = useState(announcements.filter(a => a.starred).map(a => a.id));
+  const [searchQuery, setSearchQuery] = useState('');
+  const [detailOpen, setDetailOpen] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-  const [adminMode, setAdminMode] = useState(true); // demo için true
-  const [anchorEl, setAnchorEl] = useState(null);
-  const [themeType, setThemeType] = useState('light');
-  const [commentText, setCommentText] = useState('');
-  const [notifOpen, setNotifOpen] = useState(false);
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const fileInputRef = useRef();
 
-  // Simulated real-time notification
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setNotifOpen(true);
-    }, 8000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Filtreleme ve arama
-  const filtered = announcements.filter(a =>
-    !a.archived &&
-    (tab === 0 || a.category === categories[tab]) &&
-    (a.title.toLowerCase().includes(search.toLowerCase()) || a.content.toLowerCase().includes(search.toLowerCase()))
-  );
-
-  // Favori ekle/kaldır
-  const toggleFavorite = (id) => {
-    setAnnouncements(anns => anns.map(a => a.id === id ? { ...a, favorite: !a.favorite } : a));
-    setSnackbar({ open: true, message: 'Favori durumu değiştirildi', severity: 'info' });
+  const cardStyle = {
+    background: 'rgba(30, 41, 59, 0.6)',
+    backdropFilter: 'blur(20px)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: 3,
   };
 
-  // Sabitle/Arşivle
-  const togglePin = (id) => {
-    setAnnouncements(anns => anns.map(a => a.id === id ? { ...a, pinned: !a.pinned } : a));
-    setSnackbar({ open: true, message: 'Sabitleme durumu değiştirildi', severity: 'info' });
-  };
-  const toggleArchive = (id) => {
-    setAnnouncements(anns => anns.map(a => a.id === id ? { ...a, archived: !a.archived } : a));
-    setSnackbar({ open: true, message: 'Arşiv durumu değiştirildi', severity: 'info' });
-  };
-
-  // Duyuru detay modalı
-  const openModal = (a, edit = false) => {
-    setSelected(a);
-    setEditMode(edit);
-    setModalOpen(true);
-  };
-  const closeModal = () => {
-    setModalOpen(false);
-    setSelected(null);
-    setEditMode(false);
-    setCommentText('');
+  const getTypeConfig = (type) => {
+    const config = {
+      'warning': { color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)', icon: <Warning />, label: 'Uyarı' },
+      'info': { color: '#6366f1', bg: 'rgba(99, 102, 241, 0.15)', icon: <Info />, label: 'Bilgi' },
+      'event': { color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)', icon: <Event />, label: 'Etkinlik' },
+    };
+    return config[type] || config['info'];
   };
 
-  // Duyuru sil
-  const deleteAnnouncement = (id) => {
-    setAnnouncements(anns => anns.filter(a => a.id !== id));
-    setSnackbar({ open: true, message: 'Duyuru silindi', severity: 'success' });
-    closeModal();
-  };
-
-  // Duyuru ekle/düzenle
-  const handleSave = () => {
-    if (editMode && selected) {
-      setAnnouncements(anns => anns.map(a => a.id === selected.id ? selected : a));
-      setSnackbar({ open: true, message: 'Duyuru güncellendi', severity: 'success' });
-    } else if (selected) {
-      setAnnouncements(anns => [...anns, { ...selected, id: Date.now(), comments: [], attachments: [] }]);
-      setSnackbar({ open: true, message: 'Duyuru eklendi', severity: 'success' });
-    }
-    closeModal();
-  };
-
-  // Yeni duyuru
-  const newAnnouncement = () => {
-    setSelected({ title: '', content: '', category: categories[1], author: 'Yönetici', date: 'Şimdi', favorite: false, pinned: false, archived: false, importance: 'Orta', tags: [], views: 0, likes: 0, dislikes: 0, attachments: [], comments: [] });
-    setEditMode(false);
-    setModalOpen(true);
-  };
-
-  // Yorum ekle
-  const addComment = () => {
-    if (commentText.trim() && selected) {
-      setAnnouncements(anns => anns.map(a => a.id === selected.id ? { ...a, comments: [...a.comments, { user: 'Sen', text: commentText, date: 'Şimdi' }] } : a));
-      setCommentText('');
-      setSnackbar({ open: true, message: 'Yorum eklendi', severity: 'success' });
+  const toggleStar = (id) => {
+    if (starred.includes(id)) {
+      setStarred(starred.filter(s => s !== id));
+    } else {
+      setStarred([...starred, id]);
     }
   };
 
-  // Dosya/görsel ekle
-  const handleFileChange = (e) => {
-    const files = Array.from(e.target.files);
-    setAnnouncements(anns => anns.map(a => a.id === selected.id ? { ...a, attachments: [...a.attachments, ...files.map(f => ({ name: f.name, url: URL.createObjectURL(f) }))] } : a));
-    setSnackbar({ open: true, message: 'Dosya eklendi', severity: 'success' });
-  };
-
-  // Beğeni/tepki
-  const handleLike = (id, type) => {
-    setAnnouncements(anns => anns.map(a => a.id === id ? { ...a, likes: type === 'like' ? a.likes + 1 : a.likes, dislikes: type === 'dislike' ? a.dislikes + 1 : a.dislikes } : a));
-  };
-
-  // Menü
-  const handleMenuOpen = (e) => setAnchorEl(e.currentTarget);
-  const handleMenuClose = () => setAnchorEl(null);
-
-  // Tema değiştir
-  const handleThemeChange = () => setThemeType(t => t === 'light' ? 'dark' : 'light');
-
-  // Sabitlenmişler önce gelsin
-  const sorted = [...filtered].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+  const filteredAnnouncements = announcements
+    .filter(a => tab === 0 || (tab === 1 && a.pinned) || (tab === 2 && starred.includes(a.id)))
+    .filter(a => a.title.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
-    <Box sx={{ mt: 4, bgcolor: themeType === 'dark' ? '#222' : '#f7f7f7', minHeight: '100vh', transition: 'background 0.3s' }}>
-      <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-        <Typography variant="h5" fontWeight={700} color={themeType === 'dark' ? '#fff' : 'inherit'}>Duyurular</Typography>
+    <Box sx={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+      py: 4,
+      px: { xs: 2, md: 4 },
+    }}>
+      {/* Header */}
+      <Box display="flex" alignItems="center" justifyContent="space-between" mb={4}>
         <Box display="flex" alignItems="center" gap={2}>
-          <TextField label="Ara" size="small" value={search} onChange={e => setSearch(e.target.value)} />
-          <FormControlLabel control={<Switch checked={themeType === 'dark'} onChange={handleThemeChange} />} label="Karanlık Mod" />
-          {adminMode && <Button variant="contained" startIcon={<Add />} onClick={newAnnouncement}>Yeni Duyuru</Button>}
+          <Avatar sx={{
+            width: 56,
+            height: 56,
+            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+            boxShadow: '0 8px 20px rgba(99, 102, 241, 0.3)',
+          }}>
+            <Campaign sx={{ fontSize: 28 }} />
+          </Avatar>
+          <Box>
+            <Typography variant="h4" sx={{
+              fontWeight: 700,
+              background: 'linear-gradient(135deg, #fff, #94a3b8)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}>
+              Duyurular
+            </Typography>
+            <Typography sx={{ color: 'rgba(148, 163, 184, 0.8)' }}>
+              {announcements.length} duyuru
+            </Typography>
+          </Box>
         </Box>
       </Box>
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
-        {categories.map((cat, i) => <Tab key={cat} label={cat} />)}
-      </Tabs>
-      <Grid container spacing={2}>
-        {sorted.length === 0 && (
-          <Grid item xs={12}><Alert severity="info">Duyuru bulunamadı.</Alert></Grid>
-        )}
-        {sorted.map((a) => (
-          <Grid item xs={12} md={6} key={a.id}>
-            <Slide direction="up" in mountOnEnter unmountOnExit>
-              <Card elevation={a.favorite ? 8 : 2} sx={{ position: 'relative', transition: 'box-shadow 0.3s', bgcolor: themeType === 'dark' ? '#333' : '#fff', color: themeType === 'dark' ? '#fff' : 'inherit' }}>
-                <CardContent>
-                  <Box display="flex" alignItems="center" justifyContent="space-between">
-                    <Box>
-                      <Typography fontWeight={600}>{a.title}</Typography>
-                      <Typography variant="caption" color="text.secondary">{a.date} • {a.category} • {a.importance}</Typography>
-                    </Box>
-                    <Box>
-                      <Tooltip title={a.favorite ? 'Favorilerden çıkar' : 'Favorilere ekle'}>
-                        <IconButton onClick={() => toggleFavorite(a.id)} color={a.favorite ? 'warning' : 'default'}>
-                          {a.favorite ? <Star /> : <StarBorder />}
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title={a.pinned ? 'Sabitlemeyi kaldır' : 'Sabitle'}>
-                        <IconButton onClick={() => togglePin(a.id)} color={a.pinned ? 'info' : 'default'}>
-                          <PushPin />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title={a.archived ? 'Arşivden çıkar' : 'Arşivle'}>
-                        <IconButton onClick={() => toggleArchive(a.id)} color={a.archived ? 'secondary' : 'default'}>
-                          <Archive />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Detay">
-                        <IconButton onClick={() => openModal(a)} color="primary"><Info /></IconButton>
-                      </Tooltip>
-                      {adminMode && (
-                        <>
-                          <Tooltip title="Düzenle">
-                            <IconButton onClick={() => openModal(a, true)} color="secondary"><Edit /></IconButton>
-                          </Tooltip>
-                          <Tooltip title="Sil">
-                            <IconButton onClick={() => deleteAnnouncement(a.id)} color="error"><Delete /></IconButton>
-                          </Tooltip>
-                        </>
-                      )}
-                      <IconButton onClick={handleMenuOpen}><MoreVert /></IconButton>
-                      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
-                        <MenuItem onClick={handleMenuClose}>Paylaş</MenuItem>
-                        <MenuItem onClick={handleMenuClose}>Yazdır</MenuItem>
-                      </Menu>
-                    </Box>
-                  </Box>
-                  <Divider sx={{ my: 1 }} />
-                  <Collapse in>
-                    <Typography variant="body2">{a.content}</Typography>
-                  </Collapse>
-                  <Box mt={2} display="flex" alignItems="center" gap={1} flexWrap="wrap">
-                    {a.tags.map(tag => <Chip key={tag} label={tag} color="info" size="small" />)}
-                    <Avatar sx={{ width: 24, height: 24, fontSize: 14 }}>{a.author[0]}</Avatar>
-                    <Chip label={`Görüntüleme: ${a.views}`} size="small" />
-                    <Chip label={`Beğeni: ${a.likes}`} icon={<ThumbUp />} size="small" />
-                    <Chip label={`Tepki: ${a.dislikes}`} icon={<ThumbDown />} size="small" />
-                  </Box>
-                  <Box mt={2} display="flex" gap={1}>
-                    <Button size="small" startIcon={<ThumbUp />} onClick={() => handleLike(a.id, 'like')}>Beğen</Button>
-                    <Button size="small" startIcon={<ThumbDown />} onClick={() => handleLike(a.id, 'dislike')}>Tepki</Button>
-                  </Box>
-                  {/* Ekler/Görseller */}
-                  <Box mt={2} display="flex" gap={1} flexWrap="wrap">
-                    {a.attachments.map((att, i) => (
-                      <Chip key={i} label={att.name} icon={<AttachFile />} clickable onClick={() => window.open(att.url, '_blank')} />
-                    ))}
-                    {editMode && (
-                      <Button size="small" startIcon={<Image />} onClick={() => fileInputRef.current.click()}>Dosya Ekle</Button>
-                    )}
-                    <input type="file" multiple hidden ref={fileInputRef} onChange={handleFileChange} />
-                  </Box>
-                  {/* Yorumlar */}
-                  <Box mt={3}>
-                    <Typography variant="subtitle2" mb={1}>Yorumlar</Typography>
-                    <List>
-                      {a.comments.map((c, i) => (
-                        <ListItem key={i} alignItems="flex-start">
-                          <ListItemAvatar><Avatar>{c.user[0]}</Avatar></ListItemAvatar>
-                          <ListItemText primary={c.user} secondary={<>{c.text}<br /><span style={{fontSize:12, color:'#888'}}>{c.date}</span></>} />
-                        </ListItem>
-                      ))}
-                    </List>
-                    <Box display="flex" gap={1} mt={1}>
-                      <TextField
-                        size="small"
-                        placeholder="Yorum ekle..."
-                        value={commentText}
-                        onChange={e => setCommentText(e.target.value)}
-                        InputProps={{ endAdornment: <InputAdornment position="end"><Button onClick={addComment}>Gönder</Button></InputAdornment> }}
-                      />
-                    </Box>
-                  </Box>
-                </CardContent>
-                <Badge color="warning" variant="dot" invisible={!a.favorite} sx={{ position: 'absolute', top: 8, right: 8 }} />
-                {a.pinned && <PushPin color="info" sx={{ position: 'absolute', top: 8, left: 8 }} />}
-              </Card>
-            </Slide>
+
+      {/* Stats */}
+      <Grid container spacing={2} sx={{ mb: 4 }}>
+        {[
+          { label: 'Toplam', count: announcements.length, color: '#6366f1' },
+          { label: 'Sabitlenmiş', count: announcements.filter(a => a.pinned).length, color: '#f59e0b' },
+          { label: 'Yıldızlı', count: starred.length, color: '#ec4899' },
+        ].map((stat) => (
+          <Grid item xs={4} key={stat.label}>
+            <Card sx={{ ...cardStyle, p: 2, textAlign: 'center' }}>
+              <Typography variant="h3" sx={{ color: stat.color, fontWeight: 700 }}>
+                {stat.count}
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(148, 163, 184, 0.7)' }}>
+                {stat.label}
+              </Typography>
+            </Card>
           </Grid>
         ))}
       </Grid>
-      {/* Duyuru Detay/Modal */}
-      <Dialog open={modalOpen} onClose={closeModal} maxWidth="sm" fullWidth>
-        <DialogTitle>{editMode ? 'Duyuru Düzenle' : 'Duyuru Detayı'}</DialogTitle>
-        <DialogContent>
-          <TextField
-            label="Başlık"
-            fullWidth
-            margin="normal"
-            value={selected?.title || ''}
-            onChange={e => setSelected(s => ({ ...s, title: e.target.value }))}
-            disabled={!editMode}
-          />
-          <TextField
-            label="İçerik"
-            fullWidth
-            multiline
-            minRows={3}
-            margin="normal"
-            value={selected?.content || ''}
-            onChange={e => setSelected(s => ({ ...s, content: e.target.value }))}
-            disabled={!editMode}
-          />
-          <TextField
-            label="Kategori"
-            select
-            SelectProps={{ native: true }}
-            fullWidth
-            margin="normal"
-            value={selected?.category || categories[1]}
-            onChange={e => setSelected(s => ({ ...s, category: e.target.value }))}
-            disabled={!editMode}
+
+      {/* Search & Filter */}
+      <Box display="flex" gap={2} mb={3}>
+        <TextField
+          placeholder="Duyuru ara..."
+          fullWidth
+          size="small"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          sx={{
+            '& .MuiOutlinedInput-root': {
+              background: 'rgba(30, 41, 59, 0.6)',
+              borderRadius: 2,
+              color: '#fff',
+              '& fieldset': { borderColor: 'rgba(255,255,255,0.08)' },
+              '&:hover fieldset': { borderColor: 'rgba(99, 102, 241, 0.5)' },
+            },
+          }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search sx={{ color: 'rgba(148, 163, 184, 0.6)' }} />
+              </InputAdornment>
+            )
+          }}
+        />
+        <Tooltip title="Filtrele">
+          <IconButton sx={{
+            background: 'rgba(30, 41, 59, 0.6)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            color: 'rgba(148, 163, 184, 0.6)',
+          }}>
+            <FilterList />
+          </IconButton>
+        </Tooltip>
+      </Box>
+
+      {/* Tabs & List */}
+      <Card sx={cardStyle}>
+        <CardContent sx={{ p: 3 }}>
+          <Tabs
+            value={tab}
+            onChange={(_, v) => setTab(v)}
+            sx={{
+              mb: 3,
+              '& .MuiTab-root': { color: 'rgba(148, 163, 184, 0.7)', textTransform: 'none' },
+              '& .Mui-selected': { color: '#6366f1' },
+              '& .MuiTabs-indicator': { background: '#6366f1' },
+            }}
           >
-            {categories.slice(1).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-          </TextField>
-          <TextField
-            label="Önem"
-            select
-            SelectProps={{ native: true }}
-            fullWidth
-            margin="normal"
-            value={selected?.importance || importanceLevels[1]}
-            onChange={e => setSelected(s => ({ ...s, importance: e.target.value }))}
-            disabled={!editMode}
-          >
-            {importanceLevels.map(level => <option key={level} value={level}>{level}</option>)}
-          </TextField>
-          <TextField
-            label="Etiketler (virgülle)"
-            fullWidth
-            margin="normal"
-            value={selected?.tags?.join(', ') || ''}
-            onChange={e => setSelected(s => ({ ...s, tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean) }))}
-            disabled={!editMode}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeModal} color="inherit" startIcon={<Close />}>Kapat</Button>
-          {editMode && <Button onClick={handleSave} variant="contained" color="primary">Kaydet</Button>}
-        </DialogActions>
-      </Dialog>
-      {/* Snackbar */}
+            <Tab label="Tümü" />
+            <Tab label="Sabitlenmiş" icon={<PushPin sx={{ fontSize: 16 }} />} iconPosition="start" />
+            <Tab label="Yıldızlı" icon={<Star sx={{ fontSize: 16 }} />} iconPosition="start" />
+          </Tabs>
+
+          <List sx={{ p: 0 }}>
+            {filteredAnnouncements.map((announcement, index) => {
+              const typeCfg = getTypeConfig(announcement.type);
+              const isExpanded = expandedId === announcement.id;
+
+              return (
+                <React.Fragment key={announcement.id}>
+                  <ListItem
+                    alignItems="flex-start"
+                    sx={{
+                      px: 2,
+                      py: 2,
+                      borderRadius: 2,
+                      background: announcement.pinned ? 'rgba(245, 158, 11, 0.05)' : 'transparent',
+                      borderLeft: announcement.pinned ? '3px solid #f59e0b' : '3px solid transparent',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      '&:hover': { background: 'rgba(255,255,255,0.03)' }
+                    }}
+                  >
+                    <ListItemAvatar>
+                      <Avatar sx={{
+                        width: 48,
+                        height: 48,
+                        background: typeCfg.bg,
+                        color: typeCfg.color,
+                      }}>
+                        {typeCfg.icon}
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={
+                        <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                          {announcement.pinned && (
+                            <PushPin sx={{ fontSize: 14, color: '#f59e0b' }} />
+                          )}
+                          <Typography sx={{ color: '#fff', fontWeight: 600, flex: 1 }}>
+                            {announcement.title}
+                          </Typography>
+                          <Chip
+                            label={typeCfg.label}
+                            size="small"
+                            sx={{
+                              height: 22,
+                              fontSize: 11,
+                              background: typeCfg.bg,
+                              color: typeCfg.color,
+                            }}
+                          />
+                        </Box>
+                      }
+                      secondary={
+                        <>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              color: 'rgba(148, 163, 184, 0.8)',
+                              display: '-webkit-box',
+                              WebkitLineClamp: isExpanded ? 'unset' : 2,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            {announcement.content}
+                          </Typography>
+                          <Box display="flex" alignItems="center" gap={2} mt={1}>
+                            <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.5)' }}>
+                              {announcement.author} • {announcement.date}
+                            </Typography>
+                            <Box display="flex" alignItems="center" gap={0.5}>
+                              <Comment sx={{ fontSize: 14, color: 'rgba(148, 163, 184, 0.4)' }} />
+                              <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.5)' }}>
+                                {announcement.comments}
+                              </Typography>
+                            </Box>
+                            {announcement.attachments > 0 && (
+                              <Box display="flex" alignItems="center" gap={0.5}>
+                                <AttachFile sx={{ fontSize: 14, color: 'rgba(148, 163, 184, 0.4)' }} />
+                                <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.5)' }}>
+                                  {announcement.attachments}
+                                </Typography>
+                              </Box>
+                            )}
+                          </Box>
+                        </>
+                      }
+                    />
+                    <Box display="flex" flexDirection="column" alignItems="center" gap={0.5}>
+                      <IconButton
+                        size="small"
+                        onClick={(e) => { e.stopPropagation(); toggleStar(announcement.id); }}
+                        sx={{ color: starred.includes(announcement.id) ? '#f59e0b' : 'rgba(148, 163, 184, 0.6)' }}
+                      >
+                        {starred.includes(announcement.id) ? <Star /> : <StarBorder />}
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={(e) => { e.stopPropagation(); setExpandedId(isExpanded ? null : announcement.id); }}
+                        sx={{ color: 'rgba(148, 163, 184, 0.6)' }}
+                      >
+                        {isExpanded ? <ExpandLess /> : <ExpandMore />}
+                      </IconButton>
+                    </Box>
+                  </ListItem>
+                  {index < filteredAnnouncements.length - 1 && (
+                    <Divider sx={{ borderColor: 'rgba(255,255,255,0.03)' }} />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </List>
+        </CardContent>
+      </Card>
+
       <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar(s => ({ ...s, open: false }))}>
-        <Alert severity={snackbar.severity} onClose={() => setSnackbar(s => ({ ...s, open: false }))}>{snackbar.message}</Alert>
-      </Snackbar>
-      {/* Gerçek zamanlı bildirim */}
-      <Snackbar open={notifOpen} autoHideDuration={5000} onClose={() => setNotifOpen(false)} anchorOrigin={{ vertical: 'top', horizontal: 'right' }}>
-        <Alert icon={<NotificationsActive />} severity="info" onClose={() => setNotifOpen(false)}>
-          Yeni duyuru eklendi!
-        </Alert>
+        <Alert severity={snackbar.severity}>{snackbar.message}</Alert>
       </Snackbar>
     </Box>
   );
