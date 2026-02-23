@@ -10,6 +10,9 @@ import { useAuthStore } from '../store/authStore';
 import PropertyService from '../api/PropertyService';
 import LeadService from '../api/LeadService';
 import DashboardChart from '../components/DashboardChart';
+import NotificationBanner from '../components/NotificationBanner';
+import ActivityFeed from '../components/ActivityFeed';
+import TaskWidget from '../components/TaskWidget';
 
 const StatCard = ({ icon: Icon, label, value, change, changeLabel, color, delay }) => (
     <Box
@@ -187,6 +190,12 @@ const PerformanceBar = ({ label, value, max, color }) => (
 );
 
 export default function Dashboard() {
+        // Sample activity feed data
+        const activities = [
+            { user: 'A', text: 'Ali Yıldırım yeni müşteri olarak eklendi.', time: '10 dakika önce' },
+            { user: 'E', text: 'Ece Demir villa teklifini kabul etti.', time: '1 saat önce' },
+            { user: 'M', text: 'Mehmet Kaya ile görüşme planlandı.', time: 'Dün' },
+        ];
     const navigate = useNavigate();
     const user = useAuthStore((s) => s.user);
     const [propertyStats, setPropertyStats] = useState(null);
@@ -234,6 +243,10 @@ export default function Dashboard() {
         return `₺${price}`;
     };
 
+    // Notification state
+    const [showNotification, setShowNotification] = useState(true);
+    const notificationMessage = 'Yeni müşteri başvurusu alındı! CRM bölümünden detayları inceleyin.';
+
     // Example chart data
     const revenueChartData = {
         labels: ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran'],
@@ -260,6 +273,11 @@ export default function Dashboard() {
 
     return (
         <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1400, mx: 'auto' }}>
+            {/* Notification Banner */}
+            {showNotification && (
+                <NotificationBanner message={notificationMessage} onClose={() => setShowNotification(false)} />
+            )}
+
             {/* Header */}
             <Box sx={{ mb: 3, animation: 'fadeIn 0.4s ease-out' }}>
                 <Typography sx={{
@@ -319,6 +337,12 @@ export default function Dashboard() {
 
             {/* Chart Widget */}
             <DashboardChart title="Gelir Trendleri" data={revenueChartData} options={revenueChartOptions} />
+
+            {/* Activity Feed Widget */}
+            <ActivityFeed activities={activities} />
+
+            {/* Task Widget */}
+            <TaskWidget />
 
             {/* Main Grid */}
             <Box sx={{
