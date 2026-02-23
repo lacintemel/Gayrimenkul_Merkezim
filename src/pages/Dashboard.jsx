@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import PropertyService from '../api/PropertyService';
 import LeadService from '../api/LeadService';
+import DashboardChart from '../components/DashboardChart';
 
 const StatCard = ({ icon: Icon, label, value, change, changeLabel, color, delay }) => (
     <Box
@@ -233,6 +234,30 @@ export default function Dashboard() {
         return `₺${price}`;
     };
 
+    // Example chart data
+    const revenueChartData = {
+        labels: ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran'],
+        datasets: [
+            {
+                label: 'Aylık Gelir',
+                data: [12000, 15000, 18000, 14000, 20000, leadStats?.totalRevenue ?? 0],
+                fill: false,
+                borderColor: '#10B981',
+                backgroundColor: '#10B981',
+                tension: 0.4,
+            },
+        ],
+    };
+    const revenueChartOptions = {
+        responsive: true,
+        plugins: {
+            legend: { display: true, position: 'top' },
+        },
+        scales: {
+            y: { beginAtZero: true }
+        }
+    };
+
     return (
         <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1400, mx: 'auto' }}>
             {/* Header */}
@@ -291,6 +316,9 @@ export default function Dashboard() {
                     delay={0.25}
                 />
             </Box>
+
+            {/* Chart Widget */}
+            <DashboardChart title="Gelir Trendleri" data={revenueChartData} options={revenueChartOptions} />
 
             {/* Main Grid */}
             <Box sx={{
