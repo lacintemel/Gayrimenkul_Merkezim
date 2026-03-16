@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Chip, Avatar, IconButton, Tooltip } from '@mui/material';
 import {
-    Phone, Email, CalendarMonth, NoteAdd, MoreVert,
+    Box, Typography, Chip, Avatar, IconButton, Tooltip, Dialog, DialogTitle,
+    DialogContent, DialogActions, TextField, MenuItem, Button, Snackbar, Alert
+} from '@mui/material';
+import {
+    Phone, Email, CalendarMonth, NoteAdd, MoreVert, ArrowForward,
     LocalFireDepartment, FiberNew, ContactPhone, Visibility as ViewIcon,
     LocalOffer, Handshake, ThumbDown, PersonAdd, FilterList, TrendingUp
 } from '@mui/icons-material';
 import LeadService from '../api/LeadService';
+import PropertyService from '../api/PropertyService';
 
 const stageConfig = {
     NEW: { label: 'Yeni', icon: FiberNew, color: '#3B82F6', bg: 'rgba(59, 130, 246, 0.08)' },
@@ -29,6 +33,8 @@ const priorityConfig = {
     medium: { label: 'Orta', color: '#3B82F6' },
     low: { label: 'Düşük', color: '#6B7280' },
 };
+
+const stageOrder = ['NEW', 'CONTACTED', 'VIEWING_SCHEDULED', 'OFFER_MADE', 'NEGOTIATION', 'CLOSED_WON'];
 
 const formatPrice = (price) => {
     if (!price) return '—';
@@ -56,7 +62,7 @@ const formatDate = (dateStr) => {
     return date.toLocaleDateString('tr-TR');
 };
 
-const KanbanCard = ({ lead }) => {
+const KanbanCard = ({ lead, onAdvanceStage, onAddNote, actionLoading }) => {
     const temp = tempConfig[lead.temperature] || tempConfig.cold;
     const priority = priorityConfig[lead.priority] || priorityConfig.medium;
 
@@ -177,10 +183,27 @@ const KanbanCard = ({ lead }) => {
                         </IconButton>
                     </Tooltip>
                     <Tooltip title="Not Ekle" arrow>
-                        <IconButton size="small" sx={{ width: 24, height: 24, color: '#64748B', '&:hover': { color: '#C9A84C' } }}>
+                        <IconButton
+                            size="small"
+                            disabled={actionLoading}
+                            onClick={() => onAddNote(lead)}
+                            sx={{ width: 24, height: 24, color: '#64748B', '&:hover': { color: '#C9A84C' } }}
+                        >
                             <NoteAdd sx={{ fontSize: 13 }} />
                         </IconButton>
                     </Tooltip>
+                    {lead.stage !== 'CLOSED_WON' && lead.stage !== 'CLOSED_LOST' && (
+                        <Tooltip title="Sonraki Aşamaya Taşı" arrow>
+                            <IconButton
+                                size="small"
+                                disabled={actionLoading}
+                                onClick={() => onAdvanceStage(lead)}
+                                sx={{ width: 24, height: 24, color: '#64748B', '&:hover': { color: '#10B981' } }}
+                            >
+                                <ArrowForward sx={{ fontSize: 13 }} />
+                            </IconButton>
+                        </Tooltip>
+                    )}
                 </Box>
             </Box>
 
@@ -208,25 +231,111 @@ const KanbanCard = ({ lead }) => {
 export default function CRM() {
     const [pipeline, setPipeline] = useState({});
     const [leadStats, setLeadStats] = useState(null);
+    const [customers, setCustomers] = useState([]);
+    const [properties, setProperties] = useState([]);
+    const [newLeadOpen, setNewLeadOpen] = useState(false);
+    const [creatingLead, setCreatingLead] = useState(false);
+    const [actionLoadingLeadId, setActionLoadingLeadId] = useState(null);
+    const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+    const [newLeadForm, setNewLeadForm] = useState({
+        customerId: '',
+        propertyId: '',
+        priority: 'medium',
+        temperature: 'warm',
+        source: 'website',
+        budget: '',
+        nextActionNote: '',
+    });
     const [loading, setLoading] = useState(true);
 
+    const fetchData = async () => {
+        try {
+            const [pipelineData, stats, customersData, propertiesData] = await Promise.all([
+                LeadService.getPipeline(),
+                LeadService.getStats(),
+                LeadService.getCustomers(),
+                PropertyService.getAll({ status: 'active' }),
+            ]);
+            setPipeline(pipelineData);
+            setLeadStats(stats);
+            setCustomers(customersData);
+            setProperties(propertiesData.data || []);
+        } catch (err) {
+            console.error('CRM fetch error:', err);
+            setSnackbar({ open: true, message: 'CRM verileri yüklenemedi', severity: 'error' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const [pipelineData, stats] = await Promise.all([
-                    LeadService.getPipeline(),
-                    LeadService.getStats(),
-                ]);
-                setPipeline(pipelineData);
-                setLeadStats(stats);
-            } catch (err) {
-                console.error('CRM fetch error:', err);
-            } finally {
-                setLoading(false);
-            }
-        };
         fetchData();
     }, []);
+
+    const handleAdvanceStage = async (lead) => {
+        const currentIdx = stageOrder.indexOf(lead.stage);
+        const nextStage = stageOrder[currentIdx + 1];
+        if (!nextStage) return;
+
+        try {
+            setActionLoadingLeadId(lead.id);
+            await LeadService.updateStage(lead.id, { stage: nextStage, note: `Aşama ${nextStage} olarak güncellendi` });
+            await fetchData();
+            setSnackbar({ open: true, message: 'Lead bir sonraki aşamaya taşındı', severity: 'success' });
+        } catch (err) {
+            setSnackbar({ open: true, message: 'Aşama güncellenemedi', severity: 'error' });
+        } finally {
+            setActionLoadingLeadId(null);
+        }
+    };
+
+    const handleAddNote = async (lead) => {
+        const note = window.prompt('Aktivite notu girin:');
+        if (!note || !note.trim()) return;
+
+        try {
+            setActionLoadingLeadId(lead.id);
+            await LeadService.addActivity(lead.id, {
+                type: 'note',
+                title: 'Manuel not eklendi',
+                description: note.trim(),
+            });
+            await fetchData();
+            setSnackbar({ open: true, message: 'Not eklendi', severity: 'success' });
+        } catch (err) {
+            setSnackbar({ open: true, message: 'Not eklenemedi', severity: 'error' });
+        } finally {
+            setActionLoadingLeadId(null);
+        }
+    };
+
+    const handleCreateLead = async () => {
+        if (!newLeadForm.customerId) return;
+
+        try {
+            setCreatingLead(true);
+            await LeadService.createLead({
+                customerId: newLeadForm.customerId,
+                propertyId: newLeadForm.propertyId || null,
+                priority: newLeadForm.priority,
+                temperature: newLeadForm.temperature,
+                source: newLeadForm.source,
+                budget: Number(newLeadForm.budget || 0),
+                nextActionNote: newLeadForm.nextActionNote || null,
+            });
+            setNewLeadOpen(false);
+            setNewLeadForm({
+                customerId: '', propertyId: '', priority: 'medium', temperature: 'warm',
+                source: 'website', budget: '', nextActionNote: '',
+            });
+            await fetchData();
+            setSnackbar({ open: true, message: 'Yeni lead oluşturuldu', severity: 'success' });
+        } catch (err) {
+            setSnackbar({ open: true, message: 'Lead oluşturulamadı', severity: 'error' });
+        } finally {
+            setCreatingLead(false);
+        }
+    };
 
     // Only show active pipeline stages (not closed)
     const activeStages = ['NEW', 'CONTACTED', 'VIEWING_SCHEDULED', 'OFFER_MADE', 'NEGOTIATION'];
@@ -262,12 +371,18 @@ export default function CRM() {
                         cursor: 'pointer',
                         transition: 'all 0.2s ease',
                         '&:hover': { background: 'rgba(201, 168, 76, 0.15)' }
-                    }}>
+                    }}
+                        onClick={() => setNewLeadOpen(true)}
+                    >
                         <PersonAdd sx={{ fontSize: 18, color: '#C9A84C' }} />
                         <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#C9A84C' }}>Müşteri Ekle</Typography>
                     </Box>
                 </Box>
             </Box>
+
+            {loading && (
+                <Typography sx={{ color: '#64748B', mb: 2 }}>CRM verileri yükleniyor...</Typography>
+            )}
 
             {/* Stats Bar */}
             <Box sx={{
@@ -311,7 +426,7 @@ export default function CRM() {
                 '::-webkit-scrollbar-track': { background: 'transparent' },
                 '::-webkit-scrollbar-thumb': { background: '#334155', borderRadius: 3 },
             }}>
-                {activeStages.map((stage, idx) => {
+                {activeStages.map((stage) => {
                     const config = stageConfig[stage];
                     const stageLeads = pipeline[stage] || [];
                     const StageIcon = config.icon;
@@ -371,7 +486,13 @@ export default function CRM() {
                                 '::-webkit-scrollbar-thumb': { background: '#334155', borderRadius: 2 },
                             }}>
                                 {stageLeads.map(lead => (
-                                    <KanbanCard key={lead.id} lead={lead} />
+                                    <KanbanCard
+                                        key={lead.id}
+                                        lead={lead}
+                                        onAdvanceStage={handleAdvanceStage}
+                                        onAddNote={handleAddNote}
+                                        actionLoading={actionLoadingLeadId === lead.id}
+                                    />
                                 ))}
 
                                 {stageLeads.length === 0 && (
@@ -445,6 +566,105 @@ export default function CRM() {
                     );
                 })}
             </Box>
+
+            <Dialog
+                open={newLeadOpen}
+                onClose={() => setNewLeadOpen(false)}
+                PaperProps={{ sx: { minWidth: { xs: '92vw', md: 540 } } }}
+            >
+                <DialogTitle>Yeni Lead Oluştur</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        select
+                        fullWidth
+                        margin="normal"
+                        label="Müşteri"
+                        value={newLeadForm.customerId}
+                        onChange={(e) => setNewLeadForm((prev) => ({ ...prev, customerId: e.target.value }))}
+                    >
+                        {customers.map((customer) => (
+                            <MenuItem key={customer.id} value={customer.id}>
+                                {customer.firstName} {customer.lastName}
+                            </MenuItem>
+                        ))}
+                    </TextField>
+
+                    <TextField
+                        select
+                        fullWidth
+                        margin="normal"
+                        label="İlan (Opsiyonel)"
+                        value={newLeadForm.propertyId}
+                        onChange={(e) => setNewLeadForm((prev) => ({ ...prev, propertyId: e.target.value }))}
+                    >
+                        <MenuItem value="">Genel Talep</MenuItem>
+                        {properties.map((property) => (
+                            <MenuItem key={property.id} value={property.id}>
+                                {property.title}
+                            </MenuItem>
+                        ))}
+                    </TextField>
+
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 1.2 }}>
+                        <TextField
+                            select
+                            label="Öncelik"
+                            value={newLeadForm.priority}
+                            onChange={(e) => setNewLeadForm((prev) => ({ ...prev, priority: e.target.value }))}
+                        >
+                            {Object.entries(priorityConfig).map(([key, value]) => (
+                                <MenuItem key={key} value={key}>{value.label}</MenuItem>
+                            ))}
+                        </TextField>
+
+                        <TextField
+                            select
+                            label="Sıcaklık"
+                            value={newLeadForm.temperature}
+                            onChange={(e) => setNewLeadForm((prev) => ({ ...prev, temperature: e.target.value }))}
+                        >
+                            {Object.entries(tempConfig).map(([key, value]) => (
+                                <MenuItem key={key} value={key}>{value.label}</MenuItem>
+                            ))}
+                        </TextField>
+                    </Box>
+
+                    <TextField
+                        fullWidth
+                        margin="normal"
+                        type="number"
+                        label="Bütçe"
+                        value={newLeadForm.budget}
+                        onChange={(e) => setNewLeadForm((prev) => ({ ...prev, budget: e.target.value }))}
+                    />
+
+                    <TextField
+                        fullWidth
+                        margin="normal"
+                        label="Sonraki Aksiyon Notu"
+                        value={newLeadForm.nextActionNote}
+                        onChange={(e) => setNewLeadForm((prev) => ({ ...prev, nextActionNote: e.target.value }))}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setNewLeadOpen(false)}>İptal</Button>
+                    <Button
+                        variant="contained"
+                        disabled={creatingLead || !newLeadForm.customerId}
+                        onClick={handleCreateLead}
+                    >
+                        {creatingLead ? 'Kaydediliyor...' : 'Kaydet'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Snackbar
+                open={snackbar.open}
+                autoHideDuration={3000}
+                onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+            >
+                <Alert severity={snackbar.severity} variant="filled">{snackbar.message}</Alert>
+            </Snackbar>
         </Box>
     );
 }
