@@ -16,6 +16,14 @@ const LeadService = {
     getById: (id) => apiClient.get(`/leads/${id}`).then(r => r.data),
 
     getActivities: (id) => apiClient.get(`/leads/${id}/activities`).then(r => r.data),
+
+    getCustomers: () => apiClient.get('/leads/customers/all').then(r => r.data),
+
+    createLead: (payload) => apiClient.post('/leads', payload).then(r => r.data),
+
+    updateStage: (id, payload) => apiClient.patch(`/leads/${id}/stage`, payload).then(r => r.data),
+
+    addActivity: (id, payload) => apiClient.post(`/leads/${id}/activities`, payload).then(r => r.data),
 };
 
 export default LeadService;
