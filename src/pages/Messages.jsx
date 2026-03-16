@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box, Card, CardContent, Typography, Button, Avatar, Grid,
   TextField, InputAdornment, IconButton, Badge, Chip, Divider,
@@ -9,59 +9,39 @@ import {
   Send, Search, MoreVert, AttachFile, InsertEmoticon,
   Done, DoneAll, Circle, Add, ArrowBack, Phone, VideoCall
 } from '@mui/icons-material';
+import messageService from '../api/MessageService';
 
-const conversations = [
-  {
-    id: 1,
-    name: 'Yönetici',
-    avatar: 'Y',
-    lastMessage: 'Bakım talebiniz işleme alındı.',
-    time: '10:30',
-    unread: 2,
-    online: true,
-    messages: [
-      { id: 1, text: 'Merhaba, musluk arızası için bilgi almak istiyorum.', sent: true, time: '10:15', read: true },
-      { id: 2, text: 'Merhaba, talebiniz alındı. Yarın teknik ekip gelecek.', sent: false, time: '10:28', read: true },
-      { id: 3, text: 'Bakım talebiniz işleme alındı.', sent: false, time: '10:30', read: false },
-    ]
-  },
-  {
-    id: 2,
-    name: 'Bakım Ekibi',
-    avatar: 'B',
-    lastMessage: 'Onarım tamamlandı, iyi günler.',
-    time: 'Dün',
-    unread: 0,
-    online: false,
-    messages: [
-      { id: 1, text: 'Merhaba, kombi bakımı için ne zaman müsaitsiniz?', sent: false, time: '14:00', read: true },
-      { id: 2, text: 'Yarın 14:00 uygun.', sent: true, time: '14:15', read: true },
-      { id: 3, text: 'Tamam, görüşmek üzere.', sent: false, time: '14:20', read: true },
-      { id: 4, text: 'Onarım tamamlandı, iyi günler.', sent: false, time: '16:00', read: true },
-    ]
-  },
-  {
-    id: 3,
-    name: 'Güvenlik',
-    avatar: 'G',
-    lastMessage: 'Araç plakanızı güncelledik.',
-    time: '22 Kas',
-    unread: 0,
-    online: true,
-    messages: [
-      { id: 1, text: 'Yeni aracımın plakasını kaydetmek istiyorum.', sent: true, time: '09:00', read: true },
-      { id: 2, text: 'Plakayı alabilir miyim?', sent: false, time: '09:05', read: true },
-      { id: 3, text: '34 ABC 123', sent: true, time: '09:10', read: true },
-      { id: 4, text: 'Araç plakanızı güncelledik.', sent: false, time: '09:15', read: true },
-    ]
-  },
+const gradientByIndex = [
+  'linear-gradient(135deg, #6366f1, #8b5cf6)',
+  'linear-gradient(135deg, #f59e0b, #d97706)',
+  'linear-gradient(135deg, #10b981, #059669)',
 ];
 
+const formatConversationTime = (isoTime) => {
+  if (!isoTime) return '';
+  const date = new Date(isoTime);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const now = new Date();
+  const isSameDay = date.toDateString() === now.toDateString();
+  if (isSameDay) {
+    return date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  }
+  return date.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' });
+};
+
 const Messages = () => {
+  const [conversations, setConversations] = useState([]);
+  const [loadingConversations, setLoadingConversations] = useState(true);
+  const [loadingChat, setLoadingChat] = useState(false);
+  const [selectedChatId, setSelectedChatId] = useState(null);
   const [selectedChat, setSelectedChat] = useState(null);
   const [newMessage, setNewMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [newChatOpen, setNewChatOpen] = useState(false);
+  const [newChatRecipient, setNewChatRecipient] = useState('');
+  const [newChatMessage, setNewChatMessage] = useState('');
+  const [creatingConversation, setCreatingConversation] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   const cardStyle = {
@@ -71,10 +51,91 @@ const Messages = () => {
     borderRadius: 3,
   };
 
-  const handleSendMessage = () => {
-    if (newMessage.trim()) {
+  const loadConversations = async () => {
+    try {
+      setLoadingConversations(true);
+      const data = await messageService.getConversations();
+      setConversations(data);
+    } catch (error) {
+      setSnackbar({ open: true, message: 'Mesajlar yüklenemedi', severity: 'error' });
+    } finally {
+      setLoadingConversations(false);
+    }
+  };
+
+  useEffect(() => {
+    loadConversations();
+  }, []);
+
+  const filteredConversations = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return conversations;
+    return conversations.filter((conv) =>
+      conv.name?.toLowerCase().includes(query) || conv.lastMessage?.toLowerCase().includes(query)
+    );
+  }, [conversations, searchQuery]);
+
+  const handleSelectChat = async (conversation) => {
+    try {
+      setSelectedChatId(conversation.id);
+      setLoadingChat(true);
+      const detail = await messageService.getMessages(conversation.id);
+      setSelectedChat(detail);
+
+      if ((conversation.unread || 0) > 0) {
+        await messageService.markAsRead(conversation.id);
+        setConversations((prev) => prev.map((item) => (
+          item.id === conversation.id ? { ...item, unread: 0 } : item
+        )));
+      }
+    } catch (error) {
+      setSnackbar({ open: true, message: 'Sohbet yüklenemedi', severity: 'error' });
+    } finally {
+      setLoadingChat(false);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    const messageText = newMessage.trim();
+    if (!messageText || !selectedChat?.id) return;
+
+    try {
+      const sentMessage = await messageService.sendMessage(selectedChat.id, messageText);
+      setSelectedChat((prev) => ({
+        ...prev,
+        messages: [...(prev?.messages || []), sentMessage],
+        lastMessage: sentMessage.text,
+        lastMessageTime: new Date().toISOString(),
+      }));
+      setConversations((prev) => prev.map((conv) => (
+        conv.id === selectedChat.id
+          ? { ...conv, lastMessage: sentMessage.text, lastMessageTime: new Date().toISOString() }
+          : conv
+      )));
       setNewMessage('');
-      setSnackbar({ open: true, message: 'Mesaj gönderildi', severity: 'success' });
+    } catch (error) {
+      setSnackbar({ open: true, message: 'Mesaj gönderilemedi', severity: 'error' });
+    }
+  };
+
+  const handleCreateConversation = async () => {
+    const recipient = newChatRecipient.trim();
+    const message = newChatMessage.trim();
+    if (!recipient || !message) return;
+
+    try {
+      setCreatingConversation(true);
+      const created = await messageService.createConversation(recipient, message);
+      setConversations((prev) => [created, ...prev]);
+      setNewChatOpen(false);
+      setNewChatRecipient('');
+      setNewChatMessage('');
+      setSnackbar({ open: true, message: 'Yeni sohbet oluşturuldu', severity: 'success' });
+      await handleSelectChat(created);
+    } catch (error) {
+      setSnackbar({ open: true, message: 'Sohbet oluşturulamadı', severity: 'error' });
+    } finally {
+      setCreatingConversation(false);
     }
   };
 
@@ -131,16 +192,28 @@ const Messages = () => {
             </CardContent>
 
             <List sx={{ flex: 1, overflow: 'auto', p: 0 }}>
-              {conversations.map((conv, index) => (
+              {loadingConversations && (
+                <ListItem sx={{ px: 3, py: 2 }}>
+                  <Typography sx={{ color: 'rgba(148, 163, 184, 0.8)' }}>Yükleniyor...</Typography>
+                </ListItem>
+              )}
+
+              {!loadingConversations && filteredConversations.length === 0 && (
+                <ListItem sx={{ px: 3, py: 2 }}>
+                  <Typography sx={{ color: 'rgba(148, 163, 184, 0.8)' }}>Sohbet bulunamadı</Typography>
+                </ListItem>
+              )}
+
+              {filteredConversations.map((conv, index) => (
                 <React.Fragment key={conv.id}>
                   <ListItem
-                    onClick={() => setSelectedChat(conv)}
+                    onClick={() => handleSelectChat(conv)}
                     sx={{
                       px: 3,
                       py: 2,
                       cursor: 'pointer',
-                      background: selectedChat?.id === conv.id ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
-                      borderLeft: selectedChat?.id === conv.id ? '3px solid #6366f1' : '3px solid transparent',
+                      background: selectedChatId === conv.id ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
+                      borderLeft: selectedChatId === conv.id ? '3px solid #6366f1' : '3px solid transparent',
                       transition: 'all 0.2s ease',
                       '&:hover': { background: 'rgba(255,255,255,0.03)' }
                     }}
@@ -156,9 +229,7 @@ const Messages = () => {
                         }
                       >
                         <Avatar sx={{
-                          background: conv.id === 1 ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' :
-                            conv.id === 2 ? 'linear-gradient(135deg, #f59e0b, #d97706)' :
-                              'linear-gradient(135deg, #10b981, #059669)',
+                          background: gradientByIndex[index % gradientByIndex.length],
                           fontWeight: 600,
                         }}>
                           {conv.avatar}
@@ -170,7 +241,7 @@ const Messages = () => {
                         <Box display="flex" justifyContent="space-between">
                           <Typography sx={{ color: '#fff', fontWeight: 600 }}>{conv.name}</Typography>
                           <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.6)' }}>
-                            {conv.time}
+                            {formatConversationTime(conv.lastMessageTime)}
                           </Typography>
                         </Box>
                       }
@@ -206,7 +277,7 @@ const Messages = () => {
                       }
                     />
                   </ListItem>
-                  {index < conversations.length - 1 && (
+                  {index < filteredConversations.length - 1 && (
                     <Divider sx={{ borderColor: 'rgba(255,255,255,0.03)', mx: 3 }} />
                   )}
                 </React.Fragment>
@@ -240,9 +311,7 @@ const Messages = () => {
                     badgeContent={selectedChat.online && <Circle sx={{ fontSize: 10, color: '#10b981' }} />}
                   >
                     <Avatar sx={{
-                      background: selectedChat.id === 1 ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' :
-                        selectedChat.id === 2 ? 'linear-gradient(135deg, #f59e0b, #d97706)' :
-                          'linear-gradient(135deg, #10b981, #059669)',
+                      background: gradientByIndex[0],
                     }}>
                       {selectedChat.avatar}
                     </Avatar>
@@ -266,6 +335,9 @@ const Messages = () => {
 
                 {/* Messages */}
                 <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
+                  {loadingChat && (
+                    <Typography sx={{ color: 'rgba(148, 163, 184, 0.8)', mb: 2 }}>Sohbet yükleniyor...</Typography>
+                  )}
                   {selectedChat.messages.map((msg) => (
                     <Box
                       key={msg.id}
@@ -309,7 +381,7 @@ const Messages = () => {
                       fullWidth
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                      onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
                       sx={{
                         '& .MuiOutlinedInput-root': {
                           background: 'rgba(15, 23, 42, 0.5)',
@@ -386,24 +458,23 @@ const Messages = () => {
         <DialogContent>
           <TextField
             label="Kime"
-            select
             fullWidth
             margin="normal"
+            value={newChatRecipient}
+            onChange={(e) => setNewChatRecipient(e.target.value)}
             sx={{
               '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' } },
               '& .MuiInputLabel-root': { color: 'rgba(148, 163, 184, 0.8)' },
             }}
-          >
-            <option value="yonetim">Yönetim</option>
-            <option value="bakim">Bakım Ekibi</option>
-            <option value="guvenlik">Güvenlik</option>
-          </TextField>
+          />
           <TextField
             label="Mesaj"
             fullWidth
             multiline
             rows={4}
             margin="normal"
+            value={newChatMessage}
+            onChange={(e) => setNewChatMessage(e.target.value)}
             sx={{
               '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' } },
               '& .MuiInputLabel-root': { color: 'rgba(148, 163, 184, 0.8)' },
@@ -417,13 +488,11 @@ const Messages = () => {
           <Button
             variant="contained"
             startIcon={<Send />}
-            onClick={() => {
-              setNewChatOpen(false);
-              setSnackbar({ open: true, message: 'Mesaj gönderildi', severity: 'success' });
-            }}
+            disabled={creatingConversation || !newChatRecipient.trim() || !newChatMessage.trim()}
+            onClick={handleCreateConversation}
             sx={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
           >
-            Gönder
+            {creatingConversation ? 'Gönderiliyor...' : 'Gönder'}
           </Button>
         </DialogActions>
       </Dialog>
