@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Box, Card, CardContent, Typography, Button, Chip, Avatar, Grid,
-  IconButton, Dialog, DialogTitle, DialogContent, Tabs, Tab,
+  IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Tabs, Tab,
   List, ListItem, ListItemAvatar, ListItemText, Divider, Tooltip,
   TextField, InputAdornment, Badge, Collapse, Snackbar, Alert
 } from '@mui/material';
@@ -215,6 +215,7 @@ const Announcements = () => {
                 <React.Fragment key={announcement.id}>
                   <ListItem
                     alignItems="flex-start"
+                    onClick={() => setDetailOpen(announcement)}
                     sx={{
                       px: 2,
                       py: 2,
@@ -319,6 +320,66 @@ const Announcements = () => {
           </List>
         </CardContent>
       </Card>
+
+      <Dialog
+        open={Boolean(detailOpen)}
+        onClose={() => setDetailOpen(null)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            background: 'rgba(30, 41, 59, 0.95)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 3,
+          }
+        }}
+      >
+        {detailOpen && (
+          <>
+            <DialogTitle sx={{ color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
+              <Box display="flex" alignItems="center" gap={1}>
+                {detailOpen.pinned && <PushPin sx={{ fontSize: 18, color: '#f59e0b' }} />}
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>{detailOpen.title}</Typography>
+              </Box>
+              <IconButton onClick={() => setDetailOpen(null)} sx={{ color: 'rgba(148, 163, 184, 0.7)' }}>
+                <Close />
+              </IconButton>
+            </DialogTitle>
+            <DialogContent>
+              <Chip
+                label={getTypeConfig(detailOpen.type).label}
+                sx={{
+                  mb: 2,
+                  background: getTypeConfig(detailOpen.type).bg,
+                  color: getTypeConfig(detailOpen.type).color,
+                }}
+              />
+              <Typography sx={{ color: 'rgba(226, 232, 240, 0.92)', mb: 3 }}>
+                {detailOpen.content}
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.7)' }}>
+                {detailOpen.author} • {detailOpen.date}
+              </Typography>
+            </DialogContent>
+            <DialogActions sx={{ p: 3, pt: 0 }}>
+              <Button
+                startIcon={<Share />}
+                onClick={() => {
+                  setSnackbar({ open: true, message: 'Duyuru paylaşım bağlantısı hazırlandı', severity: 'success' });
+                  setDetailOpen(null);
+                }}
+                sx={{ color: '#6366f1', textTransform: 'none' }}
+              >
+                Paylaş
+              </Button>
+              <Button onClick={() => setDetailOpen(null)} sx={{ color: 'rgba(148, 163, 184, 0.8)', textTransform: 'none' }}>
+                Kapat
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
 
       <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar(s => ({ ...s, open: false }))}>
         <Alert severity={snackbar.severity}>{snackbar.message}</Alert>

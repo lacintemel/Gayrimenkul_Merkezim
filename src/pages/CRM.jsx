@@ -282,7 +282,7 @@ export default function CRM() {
             await LeadService.updateStage(lead.id, { stage: nextStage, note: `Aşama ${nextStage} olarak güncellendi` });
             await fetchData();
             setSnackbar({ open: true, message: 'Lead bir sonraki aşamaya taşındı', severity: 'success' });
-        } catch (err) {
+        } catch {
             setSnackbar({ open: true, message: 'Aşama güncellenemedi', severity: 'error' });
         } finally {
             setActionLoadingLeadId(null);
@@ -302,7 +302,7 @@ export default function CRM() {
             });
             await fetchData();
             setSnackbar({ open: true, message: 'Not eklendi', severity: 'success' });
-        } catch (err) {
+        } catch {
             setSnackbar({ open: true, message: 'Not eklenemedi', severity: 'error' });
         } finally {
             setActionLoadingLeadId(null);
@@ -330,7 +330,7 @@ export default function CRM() {
             });
             await fetchData();
             setSnackbar({ open: true, message: 'Yeni lead oluşturuldu', severity: 'success' });
-        } catch (err) {
+        } catch {
             setSnackbar({ open: true, message: 'Lead oluşturulamadı', severity: 'error' });
         } finally {
             setCreatingLead(false);
