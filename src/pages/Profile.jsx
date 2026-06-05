@@ -27,6 +27,7 @@ const Profile = () => {
     membershipLevel: 'Premium',
     paymentScore: 98,
   });
+  const [editForm, setEditForm] = useState({ name: userData.name, phone: userData.phone });
 
   const handleLogout = async () => {
     await logout();
@@ -161,7 +162,10 @@ const Profile = () => {
                 fullWidth
                 variant="contained"
                 startIcon={<Edit />}
-                onClick={() => setEditOpen(true)}
+                onClick={() => {
+                  setEditForm({ name: userData.name, phone: userData.phone });
+                  setEditOpen(true);
+                }}
                 sx={{
                   mt: 3,
                   py: 1.2,
@@ -352,7 +356,8 @@ const Profile = () => {
             label="Ad Soyad"
             fullWidth
             margin="normal"
-            defaultValue={userData.name}
+            value={editForm.name}
+            onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
             sx={{
               '& .MuiOutlinedInput-root': {
                 color: '#fff',
@@ -367,7 +372,8 @@ const Profile = () => {
             label="Telefon"
             fullWidth
             margin="normal"
-            defaultValue={userData.phone}
+            value={editForm.phone}
+            onChange={(e) => setEditForm((prev) => ({ ...prev, phone: e.target.value }))}
             sx={{
               '& .MuiOutlinedInput-root': {
                 color: '#fff',
@@ -386,6 +392,7 @@ const Profile = () => {
           <Button
             variant="contained"
             onClick={() => {
+              setUserData((prev) => ({ ...prev, ...editForm }));
               setEditOpen(false);
               setSnackbar({ open: true, message: 'Profil güncellendi', severity: 'success' });
             }}

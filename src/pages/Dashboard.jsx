@@ -14,7 +14,7 @@ import NotificationBanner from '../components/NotificationBanner';
 import ActivityFeed from '../components/ActivityFeed';
 import TaskWidget from '../components/TaskWidget';
 
-const StatCard = ({ icon: Icon, label, value, change, changeLabel, color, delay }) => (
+const StatCard = ({ icon, label, value, change, color, delay }) => (
     <Box
         className="card"
         sx={{
@@ -46,7 +46,7 @@ const StatCard = ({ icon: Icon, label, value, change, changeLabel, color, delay 
                 alignItems: 'center',
                 justifyContent: 'center',
             }}>
-                <Icon sx={{ fontSize: 20, color }} />
+                {React.createElement(icon, { sx: { fontSize: 20, color } })}
             </Box>
             {change !== undefined && (
                 <Chip
@@ -83,7 +83,7 @@ const StatCard = ({ icon: Icon, label, value, change, changeLabel, color, delay 
     </Box>
 );
 
-const UrgentTask = ({ icon: Icon, text, time, color, onClick }) => (
+const UrgentTask = ({ icon, text, time, color, onClick }) => (
     <Box
         onClick={onClick}
         sx={{
@@ -101,13 +101,18 @@ const UrgentTask = ({ icon: Icon, text, time, color, onClick }) => (
         }}
     >
         <Box sx={{
-            width: 8, height: 8,
-            borderRadius: '50%',
+            width: 30, height: 30,
+            borderRadius: '8px',
             background: color || '#EF4444',
+            color: '#0F172A',
             flexShrink: 0,
-            animation: 'pulse-gold 2s infinite',
             boxShadow: `0 0 8px ${color || '#EF4444'}50`,
-        }} />
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+        }}>
+            {React.createElement(icon, { sx: { fontSize: 16 } })}
+        </Box>
         <Box sx={{ flex: 1 }}>
             <Typography sx={{ fontSize: 13, color: '#F1F5F9', fontWeight: 500 }}>{text}</Typography>
             <Typography sx={{ fontSize: 11, color: '#64748B' }}>{time}</Typography>
@@ -116,7 +121,7 @@ const UrgentTask = ({ icon: Icon, text, time, color, onClick }) => (
     </Box>
 );
 
-const LeadPreviewCard = ({ name, property, temperature, budget, onClick }) => {
+const LeadPreviewCard = ({ name, property, temperature, onClick }) => {
     const tempColors = { hot: '#EF4444', warm: '#F59E0B', cold: '#3B82F6' };
     const tempLabels = { hot: 'Sıcak', warm: 'Ilık', cold: 'Soğuk' };
     return (
@@ -276,6 +281,9 @@ export default function Dashboard() {
             {/* Notification Banner */}
             {showNotification && (
                 <NotificationBanner message={notificationMessage} onClose={() => setShowNotification(false)} />
+            )}
+            {loading && (
+                <Typography sx={{ color: '#64748B', mb: 2 }}>Dashboard verileri yükleniyor...</Typography>
             )}
 
             {/* Header */}
@@ -466,7 +474,6 @@ export default function Dashboard() {
                                 name={lead.customer ? `${lead.customer.firstName} ${lead.customer.lastName}` : 'Bilinmiyor'}
                                 property={lead.property?.title}
                                 temperature={lead.temperature}
-                                budget={lead.budget}
                                 onClick={() => navigate('/crm')}
                             />
                         ))}
