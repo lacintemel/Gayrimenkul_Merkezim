@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import authService from '../api/authService';
+import authService from '../api/AuthService';
 
 export const useAuthStore = create(
   persist(
@@ -55,7 +55,7 @@ export const useAuthStore = create(
             isAuthenticated: true,
             loading: false,
           });
-        } catch (error) {
+        } catch {
           set({
             user: null,
             accessToken: null,
