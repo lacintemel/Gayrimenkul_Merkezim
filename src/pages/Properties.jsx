@@ -6,10 +6,8 @@ import {
 import {
     Search, FilterList, ViewModule, ViewList, Apartment, Villa, Business,
     Landscape, Store, Warehouse, FavoriteBorder, Favorite, Visibility,
-    BedOutlined, BathtubOutlined, SquareFoot, Elevator, LocalParking,
-    Add, Sort
+    BedOutlined, BathtubOutlined, SquareFoot, Add
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
 import PropertyService from '../api/PropertyService';
 
 const typeIcons = {
@@ -49,6 +47,7 @@ const PropertyCard = ({ property, viewMode, onClick }) => {
     const primaryImage = property.images?.find(i => i.isPrimary) || property.images?.[0];
     const status = statusConfig[property.status] || statusConfig.active;
     const listing = listingTypeConfig[property.listingType] || listingTypeConfig.sale;
+    const TypeIcon = typeIcons[property.type] || Apartment;
 
     if (viewMode === 'list') {
         return (
@@ -107,8 +106,8 @@ const PropertyCard = ({ property, viewMode, onClick }) => {
 
                     <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <BedOutlined sx={{ fontSize: 16, color: '#94A3B8' }} />
-                            <Typography sx={{ fontSize: 12, color: '#94A3B8' }}>{property.roomCount}</Typography>
+                            <TypeIcon sx={{ fontSize: 16, color: '#94A3B8' }} />
+                            <Typography sx={{ fontSize: 12, color: '#94A3B8' }}>{typeLabels[property.type] || property.type}</Typography>
                         </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             <BathtubOutlined sx={{ fontSize: 16, color: '#94A3B8' }} />
@@ -309,7 +308,6 @@ const PropertyCard = ({ property, viewMode, onClick }) => {
 };
 
 export default function Properties() {
-    const navigate = useNavigate();
     const [properties, setProperties] = useState([]);
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState('grid');

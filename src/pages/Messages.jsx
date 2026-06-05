@@ -56,7 +56,7 @@ const Messages = () => {
       setLoadingConversations(true);
       const data = await messageService.getConversations();
       setConversations(data);
-    } catch (error) {
+    } catch {
       setSnackbar({ open: true, message: 'Mesajlar yüklenemedi', severity: 'error' });
     } finally {
       setLoadingConversations(false);
@@ -88,7 +88,7 @@ const Messages = () => {
           item.id === conversation.id ? { ...item, unread: 0 } : item
         )));
       }
-    } catch (error) {
+    } catch {
       setSnackbar({ open: true, message: 'Sohbet yüklenemedi', severity: 'error' });
     } finally {
       setLoadingChat(false);
@@ -113,7 +113,7 @@ const Messages = () => {
           : conv
       )));
       setNewMessage('');
-    } catch (error) {
+    } catch {
       setSnackbar({ open: true, message: 'Mesaj gönderilemedi', severity: 'error' });
     }
   };
@@ -132,7 +132,7 @@ const Messages = () => {
       setNewChatMessage('');
       setSnackbar({ open: true, message: 'Yeni sohbet oluşturuldu', severity: 'success' });
       await handleSelectChat(created);
-    } catch (error) {
+    } catch {
       setSnackbar({ open: true, message: 'Sohbet oluşturulamadı', severity: 'error' });
     } finally {
       setCreatingConversation(false);
