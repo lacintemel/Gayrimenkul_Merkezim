@@ -302,6 +302,97 @@ const Maintenance = () => {
         </CardContent>
       </Card>
 
+      <Dialog
+        open={Boolean(detailOpen)}
+        onClose={() => setDetailOpen(null)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            background: 'rgba(30, 41, 59, 0.95)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 3,
+          }
+        }}
+      >
+        {detailOpen && (
+          <>
+            <DialogTitle sx={{ color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              Talep Detayı
+              <IconButton onClick={() => setDetailOpen(null)} sx={{ color: 'rgba(148, 163, 184, 0.6)' }}>
+                <Close />
+              </IconButton>
+            </DialogTitle>
+            <DialogContent>
+              <Box display="flex" alignItems="center" gap={2} mb={3}>
+                <Avatar sx={{
+                  width: 48,
+                  height: 48,
+                  background: `${getCategoryColor(detailOpen.category)}20`,
+                  color: getCategoryColor(detailOpen.category),
+                }}>
+                  {getCategoryIcon(detailOpen.category)}
+                </Avatar>
+                <Box>
+                  <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700 }}>
+                    {detailOpen.title}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: 'rgba(148, 163, 184, 0.7)' }}>
+                    {detailOpen.category} • {detailOpen.date}
+                  </Typography>
+                </Box>
+              </Box>
+              <Box display="flex" gap={1} mb={3} flexWrap="wrap">
+                <Chip
+                  label={detailOpen.status}
+                  icon={getStatusConfig(detailOpen.status).icon}
+                  sx={{
+                    background: getStatusConfig(detailOpen.status).bg,
+                    color: getStatusConfig(detailOpen.status).color,
+                    '& .MuiChip-icon': { color: getStatusConfig(detailOpen.status).color },
+                  }}
+                />
+                <Chip
+                  label={detailOpen.priority}
+                  sx={{
+                    background: getPriorityConfig(detailOpen.priority).bg,
+                    color: getPriorityConfig(detailOpen.priority).color,
+                  }}
+                />
+              </Box>
+              <Typography sx={{ color: 'rgba(148, 163, 184, 0.7)', mb: 1 }}>
+                Atanan kişi
+              </Typography>
+              <Typography sx={{ color: '#fff', mb: 3 }}>
+                {detailOpen.assignee}
+              </Typography>
+              <Typography sx={{ color: 'rgba(148, 163, 184, 0.7)', mb: 1 }}>
+                İlerleme
+              </Typography>
+              <LinearProgress
+                variant="determinate"
+                value={detailOpen.progress}
+                sx={{
+                  height: 8,
+                  borderRadius: 4,
+                  background: 'rgba(255,255,255,0.1)',
+                  '& .MuiLinearProgress-bar': {
+                    background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
+                    borderRadius: 4,
+                  }
+                }}
+              />
+            </DialogContent>
+            <DialogActions sx={{ p: 3 }}>
+              <Button onClick={() => setDetailOpen(null)} sx={{ color: 'rgba(148, 163, 184, 0.8)' }}>
+                Kapat
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
+
       {/* New Request Dialog */}
       <Dialog
         open={newRequestOpen}
