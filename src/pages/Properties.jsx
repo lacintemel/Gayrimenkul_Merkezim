@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Box, Typography, Chip, IconButton, InputBase, Select, MenuItem,
     FormControl, Avatar, Tooltip, Skeleton, ToggleButton, ToggleButtonGroup
@@ -308,6 +309,7 @@ const PropertyCard = ({ property, viewMode, onClick }) => {
 };
 
 export default function Properties() {
+    const navigate = useNavigate();
     const [properties, setProperties] = useState([]);
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState('grid');
@@ -532,7 +534,7 @@ export default function Properties() {
                             key={property.id}
                             property={property}
                             viewMode={viewMode}
-                            onClick={() => { }}
+                            onClick={() => navigate(`/properties/${property.id}`)}
                         />
                     ))}
                 </Box>
