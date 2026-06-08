@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import MainLayout from './layouts/MainLayout';
 import Dashboard from './pages/Dashboard';
 import Properties from './pages/Properties';
+import PropertyDetail from './pages/PropertyDetail';
 import CRM from './pages/CRM';
 import Login from './pages/Login';
 import Payments from './pages/Payments';
@@ -32,6 +33,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<LayoutRoute><Dashboard /></LayoutRoute>} />
         <Route path="/properties" element={<LayoutRoute><Properties /></LayoutRoute>} />
+        <Route path="/properties/:id" element={<LayoutRoute><PropertyDetail /></LayoutRoute>} />
         <Route path="/crm" element={<LayoutRoute><CRM /></LayoutRoute>} />
         <Route path="/calendar" element={<LayoutRoute><ComingSoon title="Takvim" /></LayoutRoute>} />
         <Route path="/contracts" element={<LayoutRoute><ComingSoon title="Sözleşmeler" /></LayoutRoute>} />
