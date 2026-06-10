@@ -1,35 +1,107 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Box, Card, CardContent, Typography, Button, Chip, Avatar, Grid,
-  IconButton, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, MenuItem, LinearProgress, Stepper, Step, StepLabel,
-  List, ListItem, ListItemAvatar, ListItemText, Divider, Tooltip,
-  Snackbar, Alert, Tabs, Tab
+  Alert,
+  Avatar,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  FormControl,
+  Grid,
+  IconButton,
+  InputLabel,
+  LinearProgress,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
+  MenuItem,
+  Select,
+  Snackbar,
+  Tab,
+  Tabs,
+  TextField,
+  Tooltip,
+  Typography,
 } from '@mui/material';
 import {
-  Build, Add, Assignment, Schedule, CheckCircle, Pending, Search,
-  Plumbing, LocalFireDepartment, ElectricalServices, AcUnit,
-  FilterList, AttachFile, Send, Close
+  AcUnit,
+  Add,
+  AttachFile,
+  Build,
+  CheckCircle,
+  Close,
+  ElectricalServices,
+  FilterList,
+  LocalFireDepartment,
+  Pending,
+  Plumbing,
+  Schedule,
+  Send,
+  Warning,
 } from '@mui/icons-material';
-
-const requests = [
-  { id: 1, title: 'Musluk Akıtıyor', status: 'Devam Ediyor', date: '20 Kasım', category: 'Tesisat', priority: 'Yüksek', progress: 60, assignee: 'Ahmet Usta' },
-  { id: 2, title: 'Kombi Çalışmıyor', status: 'Beklemede', date: '23 Kasım', category: 'Isıtma', priority: 'Acil', progress: 0, assignee: '-' },
-  { id: 3, title: 'Elektrik Arızası', status: 'Tamamlandı', date: '15 Kasım', category: 'Elektrik', priority: 'Normal', progress: 100, assignee: 'Mehmet Usta' },
-  { id: 4, title: 'Klima Bakımı', status: 'Beklemede', date: '25 Kasım', category: 'Klima', priority: 'Düşük', progress: 0, assignee: '-' },
-];
+import maintenanceService from '../api/MaintenanceService';
+import UnitService from '../api/UnitService';
 
 const categories = [
-  { label: 'Tesisat', icon: Plumbing, color: '#3b82f6' },
-  { label: 'Isıtma', icon: LocalFireDepartment, color: '#ef4444' },
-  { label: 'Elektrik', icon: ElectricalServices, color: '#f59e0b' },
-  { label: 'Klima', icon: AcUnit, color: '#06b6d4' },
+  { value: 'PLUMBING', label: 'Tesisat', icon: Plumbing, color: '#3b82f6' },
+  { value: 'HVAC', label: 'Isıtma / Klima', icon: LocalFireDepartment, color: '#ef4444' },
+  { value: 'ELECTRICAL', label: 'Elektrik', icon: ElectricalServices, color: '#f59e0b' },
+  { value: 'STRUCTURAL', label: 'Yapısal', icon: Build, color: '#8b5cf6' },
+  { value: 'APPLIANCE', label: 'Cihaz', icon: AcUnit, color: '#06b6d4' },
+  { value: 'OTHER', label: 'Diğer', icon: Build, color: '#64748b' },
 ];
+
+const statusConfig = {
+  OPEN: { label: 'Açık', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)', icon: Schedule },
+  IN_PROGRESS: { label: 'Devam Ediyor', color: '#6366f1', bg: 'rgba(99, 102, 241, 0.15)', icon: Pending },
+  WAITING_PARTS: { label: 'Parça Bekliyor', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)', icon: Schedule },
+  SCHEDULED: { label: 'Planlandı', color: '#06b6d4', bg: 'rgba(6, 182, 212, 0.15)', icon: Schedule },
+  COMPLETED: { label: 'Tamamlandı', color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)', icon: CheckCircle },
+  CANCELLED: { label: 'İptal', color: '#64748b', bg: 'rgba(100, 116, 139, 0.15)', icon: Close },
+};
+
+const priorityConfig = {
+  URGENT: { label: 'Acil', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)' },
+  HIGH: { label: 'Yüksek', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)' },
+  MEDIUM: { label: 'Normal', color: '#6366f1', bg: 'rgba(99, 102, 241, 0.15)' },
+  LOW: { label: 'Düşük', color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' },
+};
+
+const formatCurrency = (value) => new Intl.NumberFormat('tr-TR', {
+  style: 'currency',
+  currency: 'TRY',
+  maximumFractionDigits: 0,
+}).format(value || 0);
+
+const formatDate = (value) => {
+  if (!value) return 'Planlanmadı';
+  return new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'long' }).format(new Date(value));
+};
+
+const getCategory = (category) => categories.find(item => item.value === category) || categories[categories.length - 1];
 
 const Maintenance = () => {
   const [tab, setTab] = useState(0);
+  const [requests, setRequests] = useState([]);
+  const [units, setUnits] = useState([]);
+  const [stats, setStats] = useState({ open: 0, inProgress: 0, completed: 0, urgent: 0, estimatedCost: 0 });
   const [newRequestOpen, setNewRequestOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [newRequest, setNewRequest] = useState({
+    title: '',
+    unitId: '',
+    category: 'PLUMBING',
+    priority: 'MEDIUM',
+    description: '',
+  });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   const cardStyle = {
@@ -39,41 +111,93 @@ const Maintenance = () => {
     borderRadius: 3,
   };
 
-  const getStatusConfig = (status) => {
-    const config = {
-      'Tamamlandı': { color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)', icon: <CheckCircle sx={{ fontSize: 16 }} /> },
-      'Devam Ediyor': { color: '#6366f1', bg: 'rgba(99, 102, 241, 0.15)', icon: <Pending sx={{ fontSize: 16 }} /> },
-      'Beklemede': { color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)', icon: <Schedule sx={{ fontSize: 16 }} /> },
-    };
-    return config[status] || config['Beklemede'];
+  const fetchData = async () => {
+    try {
+      const [requestsData, statsData, unitsData] = await Promise.all([
+        maintenanceService.getRequests(),
+        maintenanceService.getStats(),
+        UnitService.getAll(),
+      ]);
+      setRequests(requestsData.data || []);
+      setStats(statsData);
+      setUnits(unitsData.data || []);
+    } catch (err) {
+      console.error('Maintenance fetch error:', err);
+      setSnackbar({ open: true, message: 'Bakım talepleri yüklenemedi', severity: 'error' });
+    }
   };
 
-  const getPriorityConfig = (priority) => {
-    const config = {
-      'Acil': { color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)' },
-      'Yüksek': { color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)' },
-      'Normal': { color: '#6366f1', bg: 'rgba(99, 102, 241, 0.15)' },
-      'Düşük': { color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' },
-    };
-    return config[priority] || config['Normal'];
+  useEffect(() => {
+    void Promise.resolve().then(fetchData);
+  }, []);
+
+  const filteredRequests = useMemo(() => requests.filter(request => {
+    const tabMatches =
+      tab === 0 ||
+      (tab === 1 && ['IN_PROGRESS', 'SCHEDULED', 'WAITING_PARTS'].includes(request.status)) ||
+      (tab === 2 && request.status === 'OPEN') ||
+      (tab === 3 && request.status === 'COMPLETED');
+    const statusMatches = statusFilter === 'all' || request.status === statusFilter;
+    return tabMatches && statusMatches;
+  }), [requests, tab, statusFilter]);
+
+  const getStatusChip = (status) => {
+    const cfg = statusConfig[status] || statusConfig.OPEN;
+    const Icon = cfg.icon;
+    return (
+      <Chip
+        icon={<Icon sx={{ fontSize: '16px !important' }} />}
+        label={cfg.label}
+        size="small"
+        sx={{
+          background: cfg.bg,
+          color: cfg.color,
+          fontWeight: 600,
+          '& .MuiChip-icon': { color: cfg.color },
+        }}
+      />
+    );
   };
 
-  const getCategoryIcon = (category) => {
-    const cat = categories.find(c => c.label === category);
-    return cat ? <cat.icon sx={{ fontSize: 20 }} /> : <Build sx={{ fontSize: 20 }} />;
+  const getPriorityChip = (priority) => {
+    const cfg = priorityConfig[priority] || priorityConfig.MEDIUM;
+    return (
+      <Chip
+        label={cfg.label}
+        size="small"
+        sx={{ height: 22, fontSize: 10, fontWeight: 700, background: cfg.bg, color: cfg.color }}
+      />
+    );
   };
 
-  const getCategoryColor = (category) => {
-    const cat = categories.find(c => c.label === category);
-    return cat?.color || '#6366f1';
+  const handleCreateRequest = async () => {
+    try {
+      await maintenanceService.createRequest(newRequest);
+      setNewRequestOpen(false);
+      setNewRequest({ title: '', unitId: '', category: 'PLUMBING', priority: 'MEDIUM', description: '' });
+      setSnackbar({ open: true, message: 'Talep başarıyla oluşturuldu', severity: 'success' });
+      fetchData();
+    } catch (err) {
+      console.error('Create maintenance error:', err);
+      setSnackbar({ open: true, message: 'Talep oluşturulamadı', severity: 'error' });
+    }
   };
 
-  const filteredRequests = requests.filter(r =>
-    tab === 0 ||
-    (tab === 1 && r.status === 'Devam Ediyor') ||
-    (tab === 2 && r.status === 'Beklemede') ||
-    (tab === 3 && r.status === 'Tamamlandı')
-  );
+  const handleStatusUpdate = async (status) => {
+    if (!detailOpen) return;
+
+    try {
+      const updated = await maintenanceService.updateStatus(detailOpen.id, { status });
+      setRequests(prev => prev.map(item => item.id === updated.id ? updated : item));
+      setDetailOpen(updated);
+      const nextStats = await maintenanceService.getStats();
+      setStats(nextStats);
+      setSnackbar({ open: true, message: 'Talep durumu güncellendi', severity: 'success' });
+    } catch (err) {
+      console.error('Update maintenance error:', err);
+      setSnackbar({ open: true, message: 'Durum güncellenemedi', severity: 'error' });
+    }
+  };
 
   return (
     <Box sx={{
@@ -82,8 +206,7 @@ const Maintenance = () => {
       py: 4,
       px: { xs: 2, md: 4 },
     }}>
-      {/* Header */}
-      <Box display="flex" alignItems="center" justifyContent="space-between" mb={4}>
+      <Box display="flex" alignItems="center" justifyContent="space-between" mb={4} gap={2} flexWrap="wrap">
         <Box display="flex" alignItems="center" gap={2}>
           <Avatar sx={{
             width: 56,
@@ -103,7 +226,7 @@ const Maintenance = () => {
               Bakım Talepleri
             </Typography>
             <Typography sx={{ color: 'rgba(148, 163, 184, 0.8)' }}>
-              {requests.filter(r => r.status !== 'Tamamlandı').length} aktif talep
+              {stats.open + stats.inProgress} aktif talep · {stats.urgent} acil
             </Typography>
           </Box>
         </Box>
@@ -119,25 +242,23 @@ const Maintenance = () => {
             py: 1.2,
             borderRadius: 2,
             boxShadow: '0 8px 20px rgba(245, 158, 11, 0.3)',
-            '&:hover': {
-              background: 'linear-gradient(135deg, #d97706, #b45309)',
-            }
+            '&:hover': { background: 'linear-gradient(135deg, #d97706, #b45309)' },
           }}
         >
           Yeni Talep
         </Button>
       </Box>
 
-      {/* Stats */}
       <Grid container spacing={2} sx={{ mb: 4 }}>
         {[
-          { label: 'Aktif', count: requests.filter(r => r.status === 'Devam Ediyor').length, color: '#6366f1' },
-          { label: 'Beklemede', count: requests.filter(r => r.status === 'Beklemede').length, color: '#f59e0b' },
-          { label: 'Tamamlandı', count: requests.filter(r => r.status === 'Tamamlandı').length, color: '#10b981' },
+          { label: 'Açık', count: stats.open, color: '#f59e0b' },
+          { label: 'İşlemde', count: stats.inProgress, color: '#6366f1' },
+          { label: 'Tamamlandı', count: stats.completed, color: '#10b981' },
+          { label: 'Tahmini Maliyet', count: formatCurrency(stats.estimatedCost), color: '#ef4444' },
         ].map((stat) => (
-          <Grid item xs={4} key={stat.label}>
-            <Card sx={{ ...cardStyle, p: 2, textAlign: 'center' }}>
-              <Typography variant="h3" sx={{ color: stat.color, fontWeight: 700 }}>
+          <Grid item xs={6} md={3} key={stat.label}>
+            <Card sx={{ ...cardStyle, p: 2, textAlign: 'center', minHeight: 116 }}>
+              <Typography variant="h4" sx={{ color: stat.color, fontWeight: 700 }}>
                 {stat.count}
               </Typography>
               <Typography variant="body2" sx={{ color: 'rgba(148, 163, 184, 0.7)' }}>
@@ -148,23 +269,17 @@ const Maintenance = () => {
         ))}
       </Grid>
 
-      {/* Category Quick Filters */}
       <Box display="flex" gap={2} mb={4} flexWrap="wrap">
-        {categories.map((cat) => (
+        {categories.slice(0, 5).map((cat) => (
           <Card
-            key={cat.label}
+            key={cat.value}
             sx={{
               ...cardStyle,
               p: 2,
               display: 'flex',
               alignItems: 'center',
               gap: 1.5,
-              cursor: 'pointer',
               transition: 'all 0.2s ease',
-              '&:hover': {
-                transform: 'translateY(-2px)',
-                borderColor: cat.color,
-              }
             }}
           >
             <Avatar sx={{ width: 40, height: 40, background: `${cat.color}20`, color: cat.color }}>
@@ -175,10 +290,9 @@ const Maintenance = () => {
         ))}
       </Box>
 
-      {/* Requests List */}
       <Card sx={cardStyle}>
         <CardContent sx={{ p: 3 }}>
-          <Box display="flex" alignItems="center" justifyContent="space-between" mb={3}>
+          <Box display="flex" alignItems="center" justifyContent="space-between" mb={3} gap={2} flexWrap="wrap">
             <Tabs
               value={tab}
               onChange={(_, v) => setTab(v)}
@@ -189,21 +303,43 @@ const Maintenance = () => {
               }}
             >
               <Tab label="Tümü" />
-              <Tab label="Aktif" />
-              <Tab label="Beklemede" />
+              <Tab label="İşlemde" />
+              <Tab label="Açık" />
               <Tab label="Tamamlandı" />
             </Tabs>
-            <Tooltip title="Filtrele">
-              <IconButton sx={{ color: 'rgba(148, 163, 184, 0.6)' }}>
-                <FilterList />
-              </IconButton>
-            </Tooltip>
+            <Box display="flex" gap={1} alignItems="center">
+              <FormControl size="small">
+                <Select
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value)}
+                  sx={{
+                    minWidth: 150,
+                    height: 36,
+                    color: '#F1F5F9',
+                    fontSize: 13,
+                    background: 'rgba(255,255,255,0.04)',
+                    borderRadius: 2,
+                    '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.08)' },
+                    '& .MuiSvgIcon-root': { color: '#64748B' },
+                  }}
+                >
+                  <MenuItem value="all">Tüm Durumlar</MenuItem>
+                  {Object.entries(statusConfig).map(([value, config]) => (
+                    <MenuItem key={value} value={value}>{config.label}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <Tooltip title="Filtrele">
+                <IconButton sx={{ color: 'rgba(148, 163, 184, 0.6)' }}>
+                  <FilterList />
+                </IconButton>
+              </Tooltip>
+            </Box>
           </Box>
 
           <List sx={{ p: 0 }}>
             {filteredRequests.map((request, index) => {
-              const statusCfg = getStatusConfig(request.status);
-              const priorityCfg = getPriorityConfig(request.priority);
+              const category = getCategory(request.category);
 
               return (
                 <React.Fragment key={request.id}>
@@ -214,51 +350,40 @@ const Maintenance = () => {
                       borderRadius: 2,
                       cursor: 'pointer',
                       transition: 'all 0.2s ease',
-                      '&:hover': { background: 'rgba(255,255,255,0.03)' }
+                      '&:hover': { background: 'rgba(255,255,255,0.03)' },
                     }}
                     onClick={() => setDetailOpen(request)}
                   >
                     <ListItemAvatar>
-                      <Avatar sx={{
-                        width: 48,
-                        height: 48,
-                        background: `${getCategoryColor(request.category)}20`,
-                        color: getCategoryColor(request.category),
-                      }}>
-                        {getCategoryIcon(request.category)}
+                      <Avatar sx={{ width: 48, height: 48, background: `${category.color}20`, color: category.color }}>
+                        <category.icon sx={{ fontSize: 20 }} />
                       </Avatar>
                     </ListItemAvatar>
                     <ListItemText
                       primary={
-                        <Box display="flex" alignItems="center" gap={1}>
+                        <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
                           <Typography sx={{ color: '#fff', fontWeight: 600 }}>{request.title}</Typography>
-                          <Chip
-                            label={request.priority}
-                            size="small"
-                            sx={{
-                              height: 20,
-                              fontSize: 10,
-                              background: priorityCfg.bg,
-                              color: priorityCfg.color,
-                            }}
-                          />
+                          {getPriorityChip(request.priority)}
                         </Box>
                       }
                       secondary={
-                        <Box display="flex" alignItems="center" gap={2} mt={0.5}>
-                          <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.6)' }}>
-                            {request.category} • {request.date}
+                        <Box display="flex" alignItems="center" gap={2} mt={0.5} flexWrap="wrap">
+                          <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.65)' }}>
+                            {category.label} · {formatDate(request.createdAt)}
                           </Typography>
-                          {request.assignee !== '-' && (
-                            <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.6)' }}>
-                              👷 {request.assignee}
+                          <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.65)' }}>
+                            {request.unit?.property?.title} · {request.unit?.unitNumber}
+                          </Typography>
+                          {request.assignedTo && (
+                            <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.65)' }}>
+                              {request.assignedTo}
                             </Typography>
                           )}
                         </Box>
                       }
                     />
-                    <Box sx={{ minWidth: 150, mr: 2 }}>
-                      {request.status === 'Devam Ediyor' && (
+                    <Box sx={{ display: { xs: 'none', md: 'block' }, minWidth: 150, mr: 2 }}>
+                      {request.status !== 'OPEN' && (
                         <>
                           <Box display="flex" justifyContent="space-between" mb={0.5}>
                             <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.6)' }}>İlerleme</Typography>
@@ -274,23 +399,13 @@ const Maintenance = () => {
                               '& .MuiLinearProgress-bar': {
                                 background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
                                 borderRadius: 3,
-                              }
+                              },
                             }}
                           />
                         </>
                       )}
                     </Box>
-                    <Chip
-                      icon={statusCfg.icon}
-                      label={request.status}
-                      size="small"
-                      sx={{
-                        background: statusCfg.bg,
-                        color: statusCfg.color,
-                        fontWeight: 500,
-                        '& .MuiChip-icon': { color: statusCfg.color }
-                      }}
-                    />
+                    {getStatusChip(request.status)}
                   </ListItem>
                   {index < filteredRequests.length - 1 && (
                     <Divider sx={{ borderColor: 'rgba(255,255,255,0.03)' }} />
@@ -313,7 +428,7 @@ const Maintenance = () => {
             backdropFilter: 'blur(20px)',
             border: '1px solid rgba(255,255,255,0.1)',
             borderRadius: 3,
-          }
+          },
         }}
       >
         {detailOpen && (
@@ -325,51 +440,22 @@ const Maintenance = () => {
               </IconButton>
             </DialogTitle>
             <DialogContent>
-              <Box display="flex" alignItems="center" gap={2} mb={3}>
-                <Avatar sx={{
-                  width: 48,
-                  height: 48,
-                  background: `${getCategoryColor(detailOpen.category)}20`,
-                  color: getCategoryColor(detailOpen.category),
-                }}>
-                  {getCategoryIcon(detailOpen.category)}
-                </Avatar>
-                <Box>
-                  <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700 }}>
-                    {detailOpen.title}
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: 'rgba(148, 163, 184, 0.7)' }}>
-                    {detailOpen.category} • {detailOpen.date}
-                  </Typography>
-                </Box>
-              </Box>
+              <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700, mb: 0.5 }}>
+                {detailOpen.title}
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(148, 163, 184, 0.7)', mb: 2 }}>
+                {detailOpen.unit?.property?.title} · {detailOpen.unit?.unitNumber}
+              </Typography>
               <Box display="flex" gap={1} mb={3} flexWrap="wrap">
-                <Chip
-                  label={detailOpen.status}
-                  icon={getStatusConfig(detailOpen.status).icon}
-                  sx={{
-                    background: getStatusConfig(detailOpen.status).bg,
-                    color: getStatusConfig(detailOpen.status).color,
-                    '& .MuiChip-icon': { color: getStatusConfig(detailOpen.status).color },
-                  }}
-                />
-                <Chip
-                  label={detailOpen.priority}
-                  sx={{
-                    background: getPriorityConfig(detailOpen.priority).bg,
-                    color: getPriorityConfig(detailOpen.priority).color,
-                  }}
-                />
+                {getStatusChip(detailOpen.status)}
+                {getPriorityChip(detailOpen.priority)}
               </Box>
-              <Typography sx={{ color: 'rgba(148, 163, 184, 0.7)', mb: 1 }}>
-                Atanan kişi
-              </Typography>
-              <Typography sx={{ color: '#fff', mb: 3 }}>
-                {detailOpen.assignee}
-              </Typography>
-              <Typography sx={{ color: 'rgba(148, 163, 184, 0.7)', mb: 1 }}>
-                İlerleme
-              </Typography>
+              <Typography sx={{ color: 'rgba(148, 163, 184, 0.7)', mb: 1 }}>Açıklama</Typography>
+              <Typography sx={{ color: '#fff', mb: 3 }}>{detailOpen.description}</Typography>
+              <Typography sx={{ color: 'rgba(148, 163, 184, 0.7)', mb: 1 }}>Planlanan Tarih</Typography>
+              <Typography sx={{ color: '#fff', mb: 3 }}>{formatDate(detailOpen.scheduledDate)}</Typography>
+              <Typography sx={{ color: 'rgba(148, 163, 184, 0.7)', mb: 1 }}>Maliyet</Typography>
+              <Typography sx={{ color: '#fff', mb: 3 }}>{formatCurrency(detailOpen.actualCost || detailOpen.estimatedCost)}</Typography>
               <LinearProgress
                 variant="determinate"
                 value={detailOpen.progress}
@@ -380,12 +466,21 @@ const Maintenance = () => {
                   '& .MuiLinearProgress-bar': {
                     background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
                     borderRadius: 4,
-                  }
+                  },
                 }}
               />
             </DialogContent>
-            <DialogActions sx={{ p: 3 }}>
-              <Button onClick={() => setDetailOpen(null)} sx={{ color: 'rgba(148, 163, 184, 0.8)' }}>
+            <DialogActions sx={{ p: 3, flexWrap: 'wrap' }}>
+              <Button onClick={() => handleStatusUpdate('IN_PROGRESS')} sx={{ color: '#6366f1', textTransform: 'none' }}>
+                İşleme Al
+              </Button>
+              <Button onClick={() => handleStatusUpdate('SCHEDULED')} sx={{ color: '#06b6d4', textTransform: 'none' }}>
+                Planla
+              </Button>
+              <Button onClick={() => handleStatusUpdate('COMPLETED')} sx={{ color: '#10b981', textTransform: 'none' }}>
+                Tamamla
+              </Button>
+              <Button onClick={() => setDetailOpen(null)} sx={{ color: 'rgba(148, 163, 184, 0.8)', textTransform: 'none' }}>
                 Kapat
               </Button>
             </DialogActions>
@@ -393,7 +488,6 @@ const Maintenance = () => {
         )}
       </Dialog>
 
-      {/* New Request Dialog */}
       <Dialog
         open={newRequestOpen}
         onClose={() => setNewRequestOpen(false)}
@@ -405,7 +499,7 @@ const Maintenance = () => {
             backdropFilter: 'blur(20px)',
             border: '1px solid rgba(255,255,255,0.1)',
             borderRadius: 3,
-          }
+          },
         }}
       >
         <DialogTitle sx={{ color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -419,22 +513,39 @@ const Maintenance = () => {
             label="Başlık"
             fullWidth
             margin="normal"
-            placeholder="Örn: Musluk tamiri"
+            value={newRequest.title}
+            onChange={(event) => setNewRequest(prev => ({ ...prev, title: event.target.value }))}
             sx={{
-              '& .MuiOutlinedInput-root': {
-                color: '#fff',
-                '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' },
-                '&:hover fieldset': { borderColor: 'rgba(245, 158, 11, 0.5)' },
-              },
+              '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' } },
               '& .MuiInputLabel-root': { color: 'rgba(148, 163, 184, 0.8)' },
             }}
           />
+          <FormControl fullWidth margin="normal">
+            <InputLabel sx={{ color: 'rgba(148, 163, 184, 0.8)' }}>Birim</InputLabel>
+            <Select
+              label="Birim"
+              value={newRequest.unitId}
+              onChange={(event) => setNewRequest(prev => ({ ...prev, unitId: event.target.value }))}
+              sx={{
+                color: '#fff',
+                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' },
+                '& .MuiSelect-icon': { color: 'rgba(148, 163, 184, 0.6)' },
+              }}
+            >
+              {units.map(unit => (
+                <MenuItem key={unit.id} value={unit.id}>
+                  {unit.property?.title} · {unit.unitNumber}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           <TextField
             label="Kategori"
             select
             fullWidth
             margin="normal"
-            defaultValue=""
+            value={newRequest.category}
+            onChange={(event) => setNewRequest(prev => ({ ...prev, category: event.target.value }))}
             sx={{
               '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' } },
               '& .MuiInputLabel-root': { color: 'rgba(148, 163, 184, 0.8)' },
@@ -442,7 +553,7 @@ const Maintenance = () => {
             }}
           >
             {categories.map((cat) => (
-              <MenuItem key={cat.label} value={cat.label}>{cat.label}</MenuItem>
+              <MenuItem key={cat.value} value={cat.value}>{cat.label}</MenuItem>
             ))}
           </TextField>
           <TextField
@@ -450,14 +561,15 @@ const Maintenance = () => {
             select
             fullWidth
             margin="normal"
-            defaultValue="Normal"
+            value={newRequest.priority}
+            onChange={(event) => setNewRequest(prev => ({ ...prev, priority: event.target.value }))}
             sx={{
               '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' } },
               '& .MuiInputLabel-root': { color: 'rgba(148, 163, 184, 0.8)' },
             }}
           >
-            {['Düşük', 'Normal', 'Yüksek', 'Acil'].map((p) => (
-              <MenuItem key={p} value={p}>{p}</MenuItem>
+            {Object.entries(priorityConfig).map(([value, config]) => (
+              <MenuItem key={value} value={value}>{config.label}</MenuItem>
             ))}
           </TextField>
           <TextField
@@ -466,19 +578,14 @@ const Maintenance = () => {
             multiline
             rows={4}
             margin="normal"
-            placeholder="Sorunu detaylı açıklayın..."
+            value={newRequest.description}
+            onChange={(event) => setNewRequest(prev => ({ ...prev, description: event.target.value }))}
             sx={{
-              '& .MuiOutlinedInput-root': {
-                color: '#fff',
-                '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' },
-              },
+              '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' } },
               '& .MuiInputLabel-root': { color: 'rgba(148, 163, 184, 0.8)' },
             }}
           />
-          <Button
-            startIcon={<AttachFile />}
-            sx={{ mt: 1, color: '#f59e0b', textTransform: 'none' }}
-          >
+          <Button startIcon={<AttachFile />} sx={{ mt: 1, color: '#f59e0b', textTransform: 'none' }}>
             Fotoğraf Ekle
           </Button>
         </DialogContent>
@@ -489,13 +596,9 @@ const Maintenance = () => {
           <Button
             variant="contained"
             startIcon={<Send />}
-            onClick={() => {
-              setNewRequestOpen(false);
-              setSnackbar({ open: true, message: 'Talep başarıyla oluşturuldu!', severity: 'success' });
-            }}
-            sx={{
-              background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-            }}
+            onClick={handleCreateRequest}
+            disabled={!newRequest.title || !newRequest.unitId || !newRequest.description}
+            sx={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}
           >
             Talep Oluştur
           </Button>
