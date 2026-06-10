@@ -11,6 +11,7 @@ import Announcements from './pages/Announcements';
 import Documents from './pages/Documents';
 import Messages from './pages/Messages';
 import Profile from './pages/Profile';
+import Maintenance from './pages/Maintenance';
 import { useAuthStore } from './store/authStore';
 
 const PrivateRoute = ({ children }) => {
@@ -38,10 +39,11 @@ function App() {
         <Route path="/calendar" element={<LayoutRoute><ComingSoon title="Takvim" /></LayoutRoute>} />
         <Route path="/contracts" element={<LayoutRoute><ComingSoon title="Sözleşmeler" /></LayoutRoute>} />
         <Route path="/payments" element={<LayoutRoute><Payments /></LayoutRoute>} />
+        <Route path="/maintenance" element={<LayoutRoute><Maintenance /></LayoutRoute>} />
         <Route path="/announcements" element={<LayoutRoute><Announcements /></LayoutRoute>} />
         <Route path="/documents" element={<LayoutRoute><Documents /></LayoutRoute>} />
         <Route path="/messages" element={<LayoutRoute><Messages /></LayoutRoute>} />
-        <Route path="/analytics" element={<LayoutRoute><ComingSoon title="Analitik" /></LayoutRoute>} />
+        <Route path="/analytics" element={<LayoutRoute><ComingSoon title="Raporlar" /></LayoutRoute>} />
         <Route path="/profile" element={<LayoutRoute><Profile /></LayoutRoute>} />
       </Routes>
     </Router>
