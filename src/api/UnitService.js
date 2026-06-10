@@ -11,6 +11,8 @@ const UnitService = {
 
     getById: (id) => apiClient.get(`/units/${id}`).then(r => r.data),
 
+    create: (payload) => apiClient.post('/units', payload).then(r => r.data),
+
     getStats: () => apiClient.get('/units/stats').then(r => r.data),
 };
 

@@ -11,6 +11,8 @@ const PropertyService = {
 
     getById: (id) => apiClient.get(`/properties/${id}`).then(r => r.data),
 
+    create: (payload) => apiClient.post('/properties', payload).then(r => r.data),
+
     getStats: () => apiClient.get('/properties/stats').then(r => r.data),
 
     getFeatures: () => apiClient.get('/properties/features/all').then(r => r.data),
