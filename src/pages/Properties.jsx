@@ -2,15 +2,23 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Avatar,
+    Alert,
     Box,
     Button,
     Chip,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
     FormControl,
     InputBase,
+    InputLabel,
     LinearProgress,
     MenuItem,
     Select,
     Skeleton,
+    Snackbar,
+    TextField,
     Typography,
 } from '@mui/material';
 import {
@@ -28,6 +36,35 @@ import {
 } from '@mui/icons-material';
 import PropertyService from '../api/PropertyService';
 import UnitService from '../api/UnitService';
+import { useAuthStore } from '../store/authStore';
+
+const managementRoles = ['platform_admin', 'management_company', 'building_manager', 'property_owner', 'super_admin', 'agency_manager', 'agent'];
+
+const emptyPropertyForm = {
+    title: '',
+    type: 'apartment',
+    city: 'İstanbul',
+    district: '',
+    neighborhood: '',
+    price: '',
+    netArea: '',
+    grossArea: '',
+    roomCount: '2+1',
+    dues: '',
+    description: '',
+};
+
+const emptyUnitForm = {
+    propertyId: '',
+    unitNumber: '',
+    floor: '',
+    roomCount: '2+1',
+    grossArea: '',
+    netArea: '',
+    type: 'APARTMENT',
+    status: 'VACANT',
+    monthlyDues: '',
+};
 
 const formatCurrency = (value) => new Intl.NumberFormat('tr-TR', {
     style: 'currency',
@@ -284,31 +321,85 @@ const UnitRow = ({ unit }) => {
 
 export default function Properties() {
     const navigate = useNavigate();
+    const user = useAuthStore((state) => state.user);
+    const canManagePortfolio = managementRoles.includes(user?.role);
     const [properties, setProperties] = useState([]);
     const [units, setUnits] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [propertyFilter, setPropertyFilter] = useState('all');
+    const [propertyOpen, setPropertyOpen] = useState(false);
+    const [unitOpen, setUnitOpen] = useState(false);
+    const [propertyForm, setPropertyForm] = useState(emptyPropertyForm);
+    const [unitForm, setUnitForm] = useState(emptyUnitForm);
+    const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+    const fetchData = async () => {
+        try {
+            const [propertiesData, unitsData] = await Promise.all([
+                PropertyService.getAll(),
+                UnitService.getAll(),
+            ]);
+            setProperties(propertiesData.data || []);
+            setUnits(unitsData.data || []);
+        } catch (err) {
+            console.error('Property management fetch error:', err);
+            setSnackbar({ open: true, message: 'Mülk ve birimler yüklenemedi', severity: 'error' });
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const [propertiesData, unitsData] = await Promise.all([
-                    PropertyService.getAll(),
-                    UnitService.getAll(),
-                ]);
-                setProperties(propertiesData.data || []);
-                setUnits(unitsData.data || []);
-            } catch (err) {
-                console.error('Property management fetch error:', err);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchData();
+        void Promise.resolve().then(fetchData);
     }, []);
+
+    const handleCreateProperty = async () => {
+        try {
+            await PropertyService.create({
+                title: propertyForm.title,
+                type: propertyForm.type,
+                price: Number(propertyForm.price || 0),
+                netArea: Number(propertyForm.netArea || 0),
+                grossArea: Number(propertyForm.grossArea || propertyForm.netArea || 0),
+                roomCount: propertyForm.roomCount,
+                dues: Number(propertyForm.dues || 0),
+                description: propertyForm.description,
+                address: {
+                    city: propertyForm.city,
+                    district: propertyForm.district,
+                    neighborhood: propertyForm.neighborhood,
+                },
+            });
+            setPropertyOpen(false);
+            setPropertyForm(emptyPropertyForm);
+            setSnackbar({ open: true, message: 'Mülk oluşturuldu', severity: 'success' });
+            fetchData();
+        } catch (err) {
+            console.error('Create property error:', err);
+            setSnackbar({ open: true, message: err?.response?.data?.error || 'Mülk oluşturulamadı', severity: 'error' });
+        }
+    };
+
+    const handleCreateUnit = async () => {
+        try {
+            await UnitService.create({
+                ...unitForm,
+                floor: Number(unitForm.floor || 0),
+                grossArea: Number(unitForm.grossArea || unitForm.netArea || 0),
+                netArea: Number(unitForm.netArea || unitForm.grossArea || 0),
+                monthlyDues: Number(unitForm.monthlyDues || 0),
+            });
+            setUnitOpen(false);
+            setUnitForm(emptyUnitForm);
+            setSnackbar({ open: true, message: 'Birim oluşturuldu', severity: 'success' });
+            fetchData();
+        } catch (err) {
+            console.error('Create unit error:', err);
+            setSnackbar({ open: true, message: err?.response?.data?.error || 'Birim oluşturulamadı', severity: 'error' });
+        }
+    };
 
     const unitsByProperty = useMemo(() => units.reduce((acc, unit) => {
         acc[unit.propertyId] = acc[unit.propertyId] || [];
@@ -371,21 +462,40 @@ export default function Properties() {
                     </Typography>
                 </Box>
 
-                <Button
-                    variant="contained"
-                    startIcon={<Add />}
-                    sx={{
-                        height: 38,
-                        textTransform: 'none',
-                        fontWeight: 700,
-                        background: 'linear-gradient(135deg, #C9A84C, #E8D48B)',
-                        color: '#0A1628',
-                        boxShadow: '0 8px 20px rgba(201,168,76,0.18)',
-                        '&:hover': { background: 'linear-gradient(135deg, #D8B85A, #E8D48B)' },
-                    }}
-                >
-                    Yeni Mülk
-                </Button>
+                {canManagePortfolio && (
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        <Button
+                            variant="outlined"
+                            startIcon={<Add />}
+                            onClick={() => setUnitOpen(true)}
+                            sx={{
+                                height: 38,
+                                textTransform: 'none',
+                                fontWeight: 700,
+                                color: '#93C5FD',
+                                borderColor: 'rgba(147,197,253,0.35)',
+                            }}
+                        >
+                            Yeni Birim
+                        </Button>
+                        <Button
+                            variant="contained"
+                            startIcon={<Add />}
+                            onClick={() => setPropertyOpen(true)}
+                            sx={{
+                                height: 38,
+                                textTransform: 'none',
+                                fontWeight: 700,
+                                background: 'linear-gradient(135deg, #C9A84C, #E8D48B)',
+                                color: '#0A1628',
+                                boxShadow: '0 8px 20px rgba(201,168,76,0.18)',
+                                '&:hover': { background: 'linear-gradient(135deg, #D8B85A, #E8D48B)' },
+                            }}
+                        >
+                            Yeni Mülk
+                        </Button>
+                    </Box>
+                )}
             </Box>
 
             <Box sx={{
@@ -537,6 +647,72 @@ export default function Properties() {
                     </Box>
                 </Box>
             )}
+
+            <Dialog open={propertyOpen} onClose={() => setPropertyOpen(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { background: 'rgba(30,41,59,0.98)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 3 } }}>
+                <DialogTitle sx={{ color: '#fff' }}>Yeni Mülk</DialogTitle>
+                <DialogContent>
+                    <TextField label="Mülk Adı" fullWidth margin="normal" value={propertyForm.title} onChange={(e) => setPropertyForm(prev => ({ ...prev, title: e.target.value }))} sx={{ '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' } }, '& .MuiInputLabel-root': { color: '#94A3B8' } }} />
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                        <FormControl fullWidth margin="normal">
+                            <InputLabel sx={{ color: '#94A3B8' }}>Tür</InputLabel>
+                            <Select label="Tür" value={propertyForm.type} onChange={(e) => setPropertyForm(prev => ({ ...prev, type: e.target.value }))} sx={{ color: '#fff', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.12)' }, '& .MuiSelect-icon': { color: '#94A3B8' } }}>
+                                <MenuItem value="apartment">Daire</MenuItem>
+                                <MenuItem value="villa">Villa</MenuItem>
+                                <MenuItem value="office">Ofis</MenuItem>
+                                <MenuItem value="shop">Dükkan</MenuItem>
+                                <MenuItem value="land">Arazi</MenuItem>
+                            </Select>
+                        </FormControl>
+                        <TextField label="Oda" margin="normal" value={propertyForm.roomCount} onChange={(e) => setPropertyForm(prev => ({ ...prev, roomCount: e.target.value }))} sx={{ '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' } }, '& .MuiInputLabel-root': { color: '#94A3B8' } }} />
+                    </Box>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                        <TextField label="Şehir" margin="normal" value={propertyForm.city} onChange={(e) => setPropertyForm(prev => ({ ...prev, city: e.target.value }))} sx={{ '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' } }, '& .MuiInputLabel-root': { color: '#94A3B8' } }} />
+                        <TextField label="İlçe" margin="normal" value={propertyForm.district} onChange={(e) => setPropertyForm(prev => ({ ...prev, district: e.target.value }))} sx={{ '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' } }, '& .MuiInputLabel-root': { color: '#94A3B8' } }} />
+                    </Box>
+                    <TextField label="Mahalle" fullWidth margin="normal" value={propertyForm.neighborhood} onChange={(e) => setPropertyForm(prev => ({ ...prev, neighborhood: e.target.value }))} sx={{ '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' } }, '& .MuiInputLabel-root': { color: '#94A3B8' } }} />
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 2 }}>
+                        <TextField label="Değer" margin="normal" value={propertyForm.price} onChange={(e) => setPropertyForm(prev => ({ ...prev, price: e.target.value }))} sx={{ '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' } }, '& .MuiInputLabel-root': { color: '#94A3B8' } }} />
+                        <TextField label="Net m²" margin="normal" value={propertyForm.netArea} onChange={(e) => setPropertyForm(prev => ({ ...prev, netArea: e.target.value }))} sx={{ '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' } }, '& .MuiInputLabel-root': { color: '#94A3B8' } }} />
+                        <TextField label="Aidat" margin="normal" value={propertyForm.dues} onChange={(e) => setPropertyForm(prev => ({ ...prev, dues: e.target.value }))} sx={{ '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' } }, '& .MuiInputLabel-root': { color: '#94A3B8' } }} />
+                    </Box>
+                    <TextField label="Açıklama" fullWidth multiline rows={3} margin="normal" value={propertyForm.description} onChange={(e) => setPropertyForm(prev => ({ ...prev, description: e.target.value }))} sx={{ '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' } }, '& .MuiInputLabel-root': { color: '#94A3B8' } }} />
+                </DialogContent>
+                <DialogActions sx={{ p: 3 }}>
+                    <Button onClick={() => setPropertyOpen(false)} sx={{ color: '#94A3B8' }}>İptal</Button>
+                    <Button variant="contained" onClick={handleCreateProperty} disabled={!propertyForm.title || !propertyForm.city || !propertyForm.district} sx={{ background: 'linear-gradient(135deg, #C9A84C, #E8D48B)', color: '#0A1628' }}>Kaydet</Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={unitOpen} onClose={() => setUnitOpen(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { background: 'rgba(30,41,59,0.98)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 3 } }}>
+                <DialogTitle sx={{ color: '#fff' }}>Yeni Birim</DialogTitle>
+                <DialogContent>
+                    <FormControl fullWidth margin="normal">
+                        <InputLabel sx={{ color: '#94A3B8' }}>Mülk</InputLabel>
+                        <Select label="Mülk" value={unitForm.propertyId} onChange={(e) => setUnitForm(prev => ({ ...prev, propertyId: e.target.value }))} sx={{ color: '#fff', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.12)' }, '& .MuiSelect-icon': { color: '#94A3B8' } }}>
+                            {properties.map(property => (
+                                <MenuItem key={property.id} value={property.id}>{property.title}</MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                        <TextField label="Birim No" margin="normal" value={unitForm.unitNumber} onChange={(e) => setUnitForm(prev => ({ ...prev, unitNumber: e.target.value }))} sx={{ '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' } }, '& .MuiInputLabel-root': { color: '#94A3B8' } }} />
+                        <TextField label="Kat" margin="normal" value={unitForm.floor} onChange={(e) => setUnitForm(prev => ({ ...prev, floor: e.target.value }))} sx={{ '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' } }, '& .MuiInputLabel-root': { color: '#94A3B8' } }} />
+                    </Box>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 2 }}>
+                        <TextField label="Oda" margin="normal" value={unitForm.roomCount} onChange={(e) => setUnitForm(prev => ({ ...prev, roomCount: e.target.value }))} sx={{ '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' } }, '& .MuiInputLabel-root': { color: '#94A3B8' } }} />
+                        <TextField label="Net m²" margin="normal" value={unitForm.netArea} onChange={(e) => setUnitForm(prev => ({ ...prev, netArea: e.target.value }))} sx={{ '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' } }, '& .MuiInputLabel-root': { color: '#94A3B8' } }} />
+                        <TextField label="Aidat" margin="normal" value={unitForm.monthlyDues} onChange={(e) => setUnitForm(prev => ({ ...prev, monthlyDues: e.target.value }))} sx={{ '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' } }, '& .MuiInputLabel-root': { color: '#94A3B8' } }} />
+                    </Box>
+                </DialogContent>
+                <DialogActions sx={{ p: 3 }}>
+                    <Button onClick={() => setUnitOpen(false)} sx={{ color: '#94A3B8' }}>İptal</Button>
+                    <Button variant="contained" onClick={handleCreateUnit} disabled={!unitForm.propertyId || !unitForm.unitNumber} sx={{ background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)' }}>Kaydet</Button>
+                </DialogActions>
+            </Dialog>
+
+            <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}>
+                <Alert severity={snackbar.severity}>{snackbar.message}</Alert>
+            </Snackbar>
         </Box>
     );
 }

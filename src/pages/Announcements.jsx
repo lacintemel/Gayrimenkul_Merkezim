@@ -48,6 +48,9 @@ import {
 } from '@mui/icons-material';
 import announcementService from '../api/AnnouncementService';
 import PropertyService from '../api/PropertyService';
+import { useAuthStore } from '../store/authStore';
+
+const managementRoles = ['platform_admin', 'management_company', 'building_manager', 'property_owner', 'super_admin', 'agency_manager', 'agent'];
 
 const typeConfig = {
   GENERAL: { color: '#6366f1', bg: 'rgba(99, 102, 241, 0.15)', icon: Info, label: 'Genel' },
@@ -79,6 +82,8 @@ const formatDate = (date) => new Intl.DateTimeFormat('tr-TR', {
 }).format(new Date(date));
 
 const Announcements = () => {
+  const user = useAuthStore((state) => state.user);
+  const canCreateAnnouncement = managementRoles.includes(user?.role);
   const [tab, setTab] = useState(0);
   const [announcements, setAnnouncements] = useState([]);
   const [properties, setProperties] = useState([]);
@@ -128,7 +133,7 @@ const Announcements = () => {
   }, []);
 
   const filteredAnnouncements = useMemo(() => announcements
-    .filter(item => tab === 0 || (tab === 1 && item.pinned) || (tab === 2 && starred.includes(item.id)) || (tab === 3 && !(item.readBy || []).includes('user-5')))
+    .filter(item => tab === 0 || (tab === 1 && item.pinned) || (tab === 2 && starred.includes(item.id)) || (tab === 3 && !(item.readBy || []).includes(user?.id)))
     .filter(item => typeFilter === 'all' || item.type === typeFilter)
     .filter(item => {
       const haystack = [
@@ -138,7 +143,7 @@ const Announcements = () => {
         item.property?.address?.district,
       ].filter(Boolean).join(' ').toLowerCase();
       return !searchQuery || haystack.includes(searchQuery.toLowerCase());
-    }), [announcements, searchQuery, starred, tab, typeFilter]);
+    }), [announcements, searchQuery, starred, tab, typeFilter, user?.id]);
 
   const toggleStar = (id) => {
     setStarred(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
@@ -146,7 +151,7 @@ const Announcements = () => {
 
   const markRead = async (announcement) => {
     try {
-      const updated = await announcementService.markRead(announcement.id, { userId: 'user-5' });
+      const updated = await announcementService.markRead(announcement.id);
       setAnnouncements(prev => prev.map(item => item.id === updated.id ? updated : item));
       setDetailOpen(updated);
     } catch (err) {
@@ -209,19 +214,21 @@ const Announcements = () => {
             </Typography>
           </Box>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={() => setCreateOpen(true)}
-          sx={{
-            textTransform: 'none',
-            fontWeight: 700,
-            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-            boxShadow: '0 8px 20px rgba(99, 102, 241, 0.3)',
-          }}
-        >
-          Yeni Duyuru
-        </Button>
+        {canCreateAnnouncement && (
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => setCreateOpen(true)}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 700,
+              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              boxShadow: '0 8px 20px rgba(99, 102, 241, 0.3)',
+            }}
+          >
+            Yeni Duyuru
+          </Button>
+        )}
       </Box>
 
       <Grid container spacing={2} sx={{ mb: 4 }}>
@@ -323,7 +330,7 @@ const Announcements = () => {
             {filteredAnnouncements.map((announcement, index) => {
               const cfg = typeConfig[announcement.type] || typeConfig.GENERAL;
               const Icon = cfg.icon;
-              const isUnread = !(announcement.readBy || []).includes('user-5');
+              const isUnread = !(announcement.readBy || []).includes(user?.id);
 
               return (
                 <React.Fragment key={announcement.id}>

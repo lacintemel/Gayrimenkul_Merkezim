@@ -15,16 +15,19 @@ import { useAuthStore } from '../store/authStore';
 const drawerWidth = 260;
 const collapsedWidth = 72;
 
+const managementRoles = ['platform_admin', 'management_company', 'building_manager', 'property_owner', 'super_admin', 'agency_manager', 'agent'];
+const allRoles = [...managementRoles, 'tenant', 'public_user'];
+
 const menuItems = [
-  { path: '/', label: 'Dashboard', icon: Dashboard, section: 'main' },
-  { path: '/properties', label: 'Mülkler & Birimler', icon: Apartment, badge: 6, section: 'main' },
-  { path: '/payments', label: 'Kira & Aidat', icon: PaymentIcon, badge: 2, section: 'main' },
-  { path: '/maintenance', label: 'Bakım Talepleri', icon: Build, badge: 3, section: 'main' },
-  { path: '/announcements', label: 'Duyurular', icon: Campaign, section: 'main' },
-  { path: '/contracts', label: 'Sözleşmeler', icon: Description, section: 'main' },
-  { path: '/documents', label: 'Belgeler', icon: Description, section: 'main' },
-  { path: '/messages', label: 'Mesajlar', icon: Message, badge: 5, section: 'communication' },
-  { path: '/analytics', label: 'Raporlar', icon: BarChart, section: 'communication' },
+  { path: '/', label: 'Dashboard', icon: Dashboard, section: 'main', roles: allRoles },
+  { path: '/properties', label: 'Mülkler & Birimler', icon: Apartment, badge: 6, section: 'main', roles: managementRoles },
+  { path: '/payments', label: 'Kira & Aidat', icon: PaymentIcon, badge: 2, section: 'main', roles: allRoles },
+  { path: '/maintenance', label: 'Bakım Talepleri', icon: Build, badge: 3, section: 'main', roles: allRoles },
+  { path: '/announcements', label: 'Duyurular', icon: Campaign, section: 'main', roles: allRoles },
+  { path: '/contracts', label: 'Sözleşmeler', icon: Description, section: 'main', roles: managementRoles },
+  { path: '/documents', label: 'Belgeler', icon: Description, section: 'main', roles: allRoles },
+  { path: '/messages', label: 'Mesajlar', icon: Message, badge: 5, section: 'communication', roles: allRoles },
+  { path: '/analytics', label: 'Raporlar', icon: BarChart, section: 'communication', roles: managementRoles },
 ];
 
 const roleLabels = {
@@ -65,6 +68,7 @@ const MainLayout = ({ children }) => {
     ? `${user.firstName || user.name || 'User'} ${user.lastName || ''}`
     : 'User';
   const userRole = roleLabels[user?.role] || 'Kullanıcı';
+  const visibleMenuItems = menuItems.filter(item => item.roles.includes(user?.role || 'tenant'));
 
   const drawer = (
     <Box sx={{
@@ -141,9 +145,9 @@ const MainLayout = ({ children }) => {
 
       {/* Menu Items */}
       <List sx={{ flex: 1, py: 2, px: 1 }}>
-        {menuItems.map((item, index) => {
+        {visibleMenuItems.map((item, index) => {
           const isActive = location.pathname === item.path;
-          const showDivider = index > 0 && menuItems[index - 1].section !== item.section;
+          const showDivider = index > 0 && visibleMenuItems[index - 1].section !== item.section;
 
           return (
             <React.Fragment key={item.path}>
