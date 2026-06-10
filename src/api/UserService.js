@@ -1,6 +1,14 @@
 import apiClient from './axiosConfig';
 
 const userService = {
+  getUsers: async (filters = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, val]) => {
+      if (val !== undefined && val !== null && val !== '') params.append(key, val);
+    });
+    const response = await apiClient.get(`/users?${params.toString()}`);
+    return response.data;
+  },
   getProfile: async () => {
     const response = await apiClient.get('/users/me');
     return response.data;

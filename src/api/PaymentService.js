@@ -13,6 +13,10 @@ const paymentService = {
     const response = await apiClient.get('/payments/summary/stats');
     return response.data;
   },
+  payPayment: async (paymentId, payload = {}) => {
+    const response = await apiClient.patch(`/payments/${paymentId}/pay`, payload);
+    return response.data;
+  },
   uploadReceipt: async (paymentId, file) => {
     const formData = new FormData();
     formData.append('file', file);
