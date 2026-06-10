@@ -48,6 +48,9 @@ import {
 } from '@mui/icons-material';
 import maintenanceService from '../api/MaintenanceService';
 import UnitService from '../api/UnitService';
+import { useAuthStore } from '../store/authStore';
+
+const managementRoles = ['platform_admin', 'management_company', 'building_manager', 'property_owner', 'super_admin', 'agency_manager', 'agent'];
 
 const categories = [
   { value: 'PLUMBING', label: 'Tesisat', icon: Plumbing, color: '#3b82f6' },
@@ -88,6 +91,8 @@ const formatDate = (value) => {
 const getCategory = (category) => categories.find(item => item.value === category) || categories[categories.length - 1];
 
 const Maintenance = () => {
+  const user = useAuthStore((state) => state.user);
+  const canUpdateStatus = managementRoles.includes(user?.role);
   const [tab, setTab] = useState(0);
   const [requests, setRequests] = useState([]);
   const [units, setUnits] = useState([]);
@@ -471,15 +476,19 @@ const Maintenance = () => {
               />
             </DialogContent>
             <DialogActions sx={{ p: 3, flexWrap: 'wrap' }}>
-              <Button onClick={() => handleStatusUpdate('IN_PROGRESS')} sx={{ color: '#6366f1', textTransform: 'none' }}>
-                İşleme Al
-              </Button>
-              <Button onClick={() => handleStatusUpdate('SCHEDULED')} sx={{ color: '#06b6d4', textTransform: 'none' }}>
-                Planla
-              </Button>
-              <Button onClick={() => handleStatusUpdate('COMPLETED')} sx={{ color: '#10b981', textTransform: 'none' }}>
-                Tamamla
-              </Button>
+              {canUpdateStatus && (
+                <>
+                  <Button onClick={() => handleStatusUpdate('IN_PROGRESS')} sx={{ color: '#6366f1', textTransform: 'none' }}>
+                    İşleme Al
+                  </Button>
+                  <Button onClick={() => handleStatusUpdate('SCHEDULED')} sx={{ color: '#06b6d4', textTransform: 'none' }}>
+                    Planla
+                  </Button>
+                  <Button onClick={() => handleStatusUpdate('COMPLETED')} sx={{ color: '#10b981', textTransform: 'none' }}>
+                    Tamamla
+                  </Button>
+                </>
+              )}
               <Button onClick={() => setDetailOpen(null)} sx={{ color: 'rgba(148, 163, 184, 0.8)', textTransform: 'none' }}>
                 Kapat
               </Button>

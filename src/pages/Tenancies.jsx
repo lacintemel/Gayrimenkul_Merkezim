@@ -34,6 +34,9 @@ import {
 import TenancyService from '../api/TenancyService';
 import UnitService from '../api/UnitService';
 import userService from '../api/UserService';
+import { useAuthStore } from '../store/authStore';
+
+const managementRoles = ['platform_admin', 'management_company', 'building_manager', 'property_owner', 'super_admin', 'agency_manager', 'agent'];
 
 const formatCurrency = (value) => new Intl.NumberFormat('tr-TR', {
   style: 'currency',
@@ -74,6 +77,8 @@ const SummaryCard = ({ icon, label, value, caption, color }) => (
 );
 
 export default function Tenancies() {
+  const user = useAuthStore((state) => state.user);
+  const canManageTenancies = managementRoles.includes(user?.role);
   const [tenancies, setTenancies] = useState([]);
   const [units, setUnits] = useState([]);
   const [tenants, setTenants] = useState([]);
@@ -164,14 +169,16 @@ export default function Tenancies() {
             <Typography sx={{ color: 'rgba(148,163,184,0.8)' }}>{stats.active} aktif kiracılık · {vacantUnits.length} boş birim</Typography>
           </Box>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={() => setOpen(true)}
-          sx={{ textTransform: 'none', background: 'linear-gradient(135deg, #8B5CF6, #3B82F6)', fontWeight: 700 }}
-        >
-          Kiracılık Başlat
-        </Button>
+        {canManageTenancies && (
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => setOpen(true)}
+            sx={{ textTransform: 'none', background: 'linear-gradient(135deg, #8B5CF6, #3B82F6)', fontWeight: 700 }}
+          >
+            Kiracılık Başlat
+          </Button>
+        )}
       </Box>
 
       <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -219,7 +226,7 @@ export default function Tenancies() {
                   <Box display="flex" gap={1} alignItems="center" justifyContent={{ xs: 'flex-start', md: 'flex-end' }} flexWrap="wrap">
                     <Chip label={status.label} sx={{ color: status.color, background: status.bg, fontWeight: 700 }} />
                     {overdue > 0 && <Chip label={formatCurrency(overdue)} sx={{ color: '#EF4444', background: 'rgba(239,68,68,0.12)', fontWeight: 700 }} />}
-                    {tenancy.status === 'ACTIVE' && (
+                    {canManageTenancies && tenancy.status === 'ACTIVE' && (
                       <Button size="small" onClick={() => handleTerminate(tenancy)} startIcon={<EventBusy />} sx={{ color: '#EF4444', textTransform: 'none' }}>
                         Sonlandır
                       </Button>

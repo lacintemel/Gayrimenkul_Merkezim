@@ -11,6 +11,9 @@ import {
   CloudUpload, GridView, ViewList, Delete, Share, Visibility
 } from '@mui/icons-material';
 import documentService from '../api/DocumentService';
+import { useAuthStore } from '../store/authStore';
+
+const managementRoles = ['platform_admin', 'management_company', 'building_manager', 'property_owner', 'super_admin', 'agency_manager', 'agent'];
 
 const formatDate = (date) => new Intl.DateTimeFormat('tr-TR', {
   day: '2-digit',
@@ -19,6 +22,8 @@ const formatDate = (date) => new Intl.DateTimeFormat('tr-TR', {
 }).format(new Date(date));
 
 const Documents = () => {
+  const user = useAuthStore((state) => state.user);
+  const canDeleteDocuments = managementRoles.includes(user?.role);
   const [tab, setTab] = useState(0);
   const [viewMode, setViewMode] = useState('list');
   const [searchQuery, setSearchQuery] = useState('');
@@ -411,10 +416,14 @@ const Documents = () => {
         <MenuItem onClick={() => setAnchorEl(null)} sx={{ color: '#fff' }}>
           <Share sx={{ mr: 1, fontSize: 18 }} /> Paylaş
         </MenuItem>
-        <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
-        <MenuItem onClick={() => setAnchorEl(null)} sx={{ color: '#ef4444' }}>
-          <Delete sx={{ mr: 1, fontSize: 18 }} /> Sil
-        </MenuItem>
+        {canDeleteDocuments && (
+          <>
+            <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
+            <MenuItem onClick={() => setAnchorEl(null)} sx={{ color: '#ef4444' }}>
+              <Delete sx={{ mr: 1, fontSize: 18 }} /> Sil
+            </MenuItem>
+          </>
+        )}
       </Menu>
 
       {/* Upload Dialog */}
