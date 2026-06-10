@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Avatar, Chip, LinearProgress, IconButton, Tooltip } from '@mui/material';
+import { Box, Typography, Avatar, Chip, LinearProgress } from '@mui/material';
 import {
-    TrendingUp, TrendingDown, Apartment, AttachMoney, Visibility, FavoriteBorder,
-    Warning, Phone, CalendarMonth, AccessTime, ArrowForward, LocalFireDepartment,
-    PersonAdd, Handshake, OpenInNew
+    TrendingUp, TrendingDown, Apartment, AttachMoney,
+    Warning, CalendarMonth, AccessTime, ArrowForward, LocalFireDepartment,
+    PersonAdd, Handshake
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import PropertyService from '../api/PropertyService';
-import LeadService from '../api/LeadService';
+import DashboardService from '../api/DashboardService';
 import DashboardChart from '../components/DashboardChart';
 import NotificationBanner from '../components/NotificationBanner';
 import ActivityFeed from '../components/ActivityFeed';
@@ -121,9 +120,11 @@ const UrgentTask = ({ icon, text, time, color, onClick }) => (
     </Box>
 );
 
-const LeadPreviewCard = ({ name, property, temperature, onClick }) => {
-    const tempColors = { hot: '#EF4444', warm: '#F59E0B', cold: '#3B82F6' };
-    const tempLabels = { hot: 'Sıcak', warm: 'Ilık', cold: 'Soğuk' };
+const TenancyPreviewCard = ({ name, property, paymentState, onClick }) => {
+    const stateColors = { overdue: '#EF4444', pending: '#F59E0B', paid: '#10B981' };
+    const stateLabels = { overdue: 'Gecikmiş', pending: 'Bekliyor', paid: 'Ödendi' };
+    const color = stateColors[paymentState] || stateColors.pending;
+
     return (
         <Box
             onClick={onClick}
@@ -143,8 +144,8 @@ const LeadPreviewCard = ({ name, property, temperature, onClick }) => {
                 width: 32, height: 32,
                 fontSize: 12,
                 fontWeight: 600,
-                background: `${tempColors[temperature]}20`,
-                color: tempColors[temperature],
+                background: `${color}20`,
+                color,
             }}>
                 {name?.split(' ').map(n => n[0]).join('') || 'M'}
             </Avatar>
@@ -155,14 +156,14 @@ const LeadPreviewCard = ({ name, property, temperature, onClick }) => {
                 </Typography>
             </Box>
             <Chip
-                label={tempLabels[temperature]}
+                label={stateLabels[paymentState] || stateLabels.pending}
                 size="small"
                 sx={{
                     height: 22,
                     fontSize: 10,
                     fontWeight: 700,
-                    background: `${tempColors[temperature]}18`,
-                    color: tempColors[temperature],
+                    background: `${color}18`,
+                    color,
                     border: 'none',
                 }}
             />
@@ -195,30 +196,16 @@ const PerformanceBar = ({ label, value, max, color }) => (
 );
 
 export default function Dashboard() {
-        // Sample activity feed data
-        const activities = [
-            { user: 'A', text: 'Ali Yıldırım yeni müşteri olarak eklendi.', time: '10 dakika önce' },
-            { user: 'E', text: 'Ece Demir villa teklifini kabul etti.', time: '1 saat önce' },
-            { user: 'M', text: 'Mehmet Kaya ile görüşme planlandı.', time: 'Dün' },
-        ];
     const navigate = useNavigate();
     const user = useAuthStore((s) => s.user);
-    const [propertyStats, setPropertyStats] = useState(null);
-    const [leadStats, setLeadStats] = useState(null);
-    const [leads, setLeads] = useState([]);
+    const [dashboardSummary, setDashboardSummary] = useState(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [pStats, lStats, leadsData] = await Promise.all([
-                    PropertyService.getStats(),
-                    LeadService.getStats(),
-                    LeadService.getAll(),
-                ]);
-                setPropertyStats(pStats);
-                setLeadStats(lStats);
-                setLeads(leadsData.data || []);
+                const summary = await DashboardService.getSummary();
+                setDashboardSummary(summary);
             } catch (err) {
                 console.error('Dashboard fetch error:', err);
             } finally {
@@ -236,11 +223,12 @@ export default function Dashboard() {
     };
 
     const userName = user?.firstName || user?.name || 'Kullanıcı';
-
-    const activeLeads = leads.filter(l => !['CLOSED_WON', 'CLOSED_LOST'].includes(l.stage));
-    const hotLeads = leads.filter(l => l.temperature === 'hot' && !['CLOSED_WON', 'CLOSED_LOST'].includes(l.stage));
-    const warmLeads = leads.filter(l => l.temperature === 'warm' && !['CLOSED_WON', 'CLOSED_LOST'].includes(l.stage));
-    const coldLeads = leads.filter(l => l.temperature === 'cold' && !['CLOSED_WON', 'CLOSED_LOST'].includes(l.stage));
+    const kpis = dashboardSummary?.kpis || {};
+    const unitStatus = dashboardSummary?.unitStatus || {};
+    const paymentStatus = dashboardSummary?.paymentStatus || {};
+    const tenancyPreview = dashboardSummary?.tenancyPreview || [];
+    const urgentTasks = dashboardSummary?.urgentTasks || [];
+    const activities = dashboardSummary?.activities || [];
 
     const formatPrice = (price) => {
         if (price >= 1000000) return `₺${(price / 1000000).toFixed(1)}M`;
@@ -250,15 +238,15 @@ export default function Dashboard() {
 
     // Notification state
     const [showNotification, setShowNotification] = useState(true);
-    const notificationMessage = 'Yeni müşteri başvurusu alındı! CRM bölümünden detayları inceleyin.';
+    const notificationMessage = 'Yeni bakım talebi alındı. Bakım Talepleri bölümünden detayları inceleyin.';
 
     // Example chart data
     const revenueChartData = {
-        labels: ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran'],
+        labels: dashboardSummary?.revenueTrend?.labels || ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran'],
         datasets: [
             {
-                label: 'Aylık Gelir',
-                data: [12000, 15000, 18000, 14000, 20000, leadStats?.totalRevenue ?? 0],
+                label: 'Aylık Tahsilat',
+                data: dashboardSummary?.revenueTrend?.data || [0, 0, 0, 0, 0, 0],
                 fill: false,
                 borderColor: '#10B981',
                 backgroundColor: '#10B981',
@@ -311,32 +299,32 @@ export default function Dashboard() {
             }}>
                 <StatCard
                     icon={Apartment}
-                    label="Aktif İlan"
-                    value={propertyStats?.active ?? '—'}
+                    label="Yönetilen Mülk"
+                    value={kpis.managedProperties ?? '—'}
                     change={12}
                     color="#C9A84C"
                     delay={0.1}
                 />
                 <StatCard
                     icon={AttachMoney}
-                    label="Bu Ay Gelir"
-                    value={formatPrice(leadStats?.totalRevenue ?? 0)}
+                    label="Bu Ay Tahsilat"
+                    value={formatPrice(kpis.collectedThisMonth ?? 0)}
                     change={8}
                     color="#10B981"
                     delay={0.15}
                 />
                 <StatCard
                     icon={PersonAdd}
-                    label="Aktif Müşteri"
-                    value={activeLeads.length}
-                    change={-3}
+                    label="Aktif Kiracı"
+                    value={kpis.activeTenants ?? 0}
+                    change={3}
                     color="#3B82F6"
                     delay={0.2}
                 />
                 <StatCard
                     icon={Handshake}
-                    label="Kapanış Oranı"
-                    value={`%${leadStats?.conversionRate ?? 0}`}
+                    label="Tahsilat Oranı"
+                    value={`%${kpis.collectionRate ?? 0}`}
                     change={5}
                     color="#8B5CF6"
                     delay={0.25}
@@ -344,7 +332,7 @@ export default function Dashboard() {
             </Box>
 
             {/* Chart Widget */}
-            <DashboardChart title="Gelir Trendleri" data={revenueChartData} options={revenueChartOptions} />
+            <DashboardChart title="Tahsilat Trendleri" data={revenueChartData} options={revenueChartOptions} />
 
             {/* Activity Feed Widget */}
             <ActivityFeed activities={activities} />
@@ -380,37 +368,26 @@ export default function Dashboard() {
                                 Acil Görevler
                             </Typography>
                         </Box>
-                        <Chip label="3" size="small" sx={{
+                        <Chip label={urgentTasks.length} size="small" sx={{
                             height: 22, fontSize: 11, fontWeight: 700,
                             background: 'rgba(239, 68, 68, 0.15)', color: '#EF4444',
                         }} />
                     </Box>
                     <Box sx={{ py: 1 }}>
-                        <UrgentTask
-                            icon={Phone}
-                            text="Ali Yıldırım — Geri arama bekleniyor"
-                            time="2 saat önce"
-                            color="#EF4444"
-                            onClick={() => navigate('/crm')}
-                        />
-                        <UrgentTask
-                            icon={CalendarMonth}
-                            text="Kadıköy daire gösterimi — Bugün 14:00"
-                            time="3 saat sonra"
-                            color="#F59E0B"
-                            onClick={() => navigate('/crm')}
-                        />
-                        <UrgentTask
-                            icon={AccessTime}
-                            text="Villa teklifi — 6 saat içinde süresi doluyor"
-                            time="Teklif: ₺17.5M"
-                            color="#EF4444"
-                            onClick={() => navigate('/crm')}
-                        />
+                        {urgentTasks.map(task => (
+                            <UrgentTask
+                                key={task.id}
+                                icon={task.severity === 'high' ? Warning : AccessTime}
+                                text={task.description}
+                                time={task.time}
+                                color={task.severity === 'high' ? '#EF4444' : '#F59E0B'}
+                                onClick={() => navigate(task.path)}
+                            />
+                        ))}
                     </Box>
                 </Box>
 
-                {/* New Leads */}
+                {/* Active Tenancies */}
                 <Box className="card" sx={{
                     p: 0,
                     overflow: 'hidden',
@@ -428,13 +405,13 @@ export default function Dashboard() {
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <LocalFireDepartment sx={{ fontSize: 18, color: '#C9A84C' }} />
                             <Typography sx={{ fontSize: 14, fontWeight: 600, color: '#F1F5F9', fontFamily: "'Outfit', sans-serif" }}>
-                                Aktif Müşteriler
+                                Aktif Kiracılıklar
                             </Typography>
                         </Box>
                         <Chip
                             label="Tümünü Gör"
                             size="small"
-                            onClick={() => navigate('/crm')}
+                            onClick={() => navigate('/messages')}
                             sx={{
                                 height: 24, fontSize: 11, cursor: 'pointer',
                                 background: 'rgba(201, 168, 76, 0.1)', color: '#C9A84C',
@@ -443,12 +420,12 @@ export default function Dashboard() {
                         />
                     </Box>
 
-                    {/* Temperature summary */}
+                    {/* Payment summary */}
                     <Box sx={{ display: 'flex', gap: 1, px: 2.5, py: 1.5, borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                         {[
-                            { label: 'Sıcak', count: hotLeads.length, color: '#EF4444', icon: '🔥' },
-                            { label: 'Ilık', count: warmLeads.length, color: '#F59E0B', icon: '🟡' },
-                            { label: 'Soğuk', count: coldLeads.length, color: '#3B82F6', icon: '🔵' },
+                            { label: 'Ödendi', count: paymentStatus.paid ?? 0, color: '#10B981', icon: '✓' },
+                            { label: 'Bekliyor', count: paymentStatus.pending ?? 0, color: '#F59E0B', icon: '•' },
+                            { label: 'Gecikmiş', count: paymentStatus.overdue ?? 0, color: '#EF4444', icon: '!' },
                         ].map(t => (
                             <Box key={t.label} sx={{
                                 flex: 1,
@@ -468,13 +445,13 @@ export default function Dashboard() {
                     </Box>
 
                     <Box sx={{ py: 1 }}>
-                        {activeLeads.slice(0, 4).map(lead => (
-                            <LeadPreviewCard
-                                key={lead.id}
-                                name={lead.customer ? `${lead.customer.firstName} ${lead.customer.lastName}` : 'Bilinmiyor'}
-                                property={lead.property?.title}
-                                temperature={lead.temperature}
-                                onClick={() => navigate('/crm')}
+                        {tenancyPreview.slice(0, 4).map(tenancy => (
+                            <TenancyPreviewCard
+                                key={tenancy.id}
+                                name={tenancy.unitNumber || 'Birim'}
+                                property={tenancy.propertyTitle}
+                                paymentState={tenancy.paymentState}
+                                onClick={() => navigate('/payments')}
                             />
                         ))}
                     </Box>
@@ -493,11 +470,11 @@ export default function Dashboard() {
                         </Typography>
                     </Box>
 
-                    <PerformanceBar label="Aktif İlanlar" value={propertyStats?.active ?? 0} max={20} color="#C9A84C" />
-                    <PerformanceBar label="Toplam Görüntülenme" value={propertyStats?.totalViews ?? 0} max={2000} color="#3B82F6" />
-                    <PerformanceBar label="Favorilere Eklenme" value={propertyStats?.totalFavorites ?? 0} max={300} color="#EF4444" />
-                    <PerformanceBar label="Kazanılan Lead" value={leadStats?.won ?? 0} max={10} color="#10B981" />
-                    <PerformanceBar label="Kaybedilen Lead" value={leadStats?.lost ?? 0} max={10} color="#64748B" />
+                    <PerformanceBar label="Yönetilen Mülkler" value={kpis.managedProperties ?? 0} max={20} color="#C9A84C" />
+                    <PerformanceBar label="Toplam Birim" value={kpis.totalUnits ?? 0} max={30} color="#3B82F6" />
+                    <PerformanceBar label="Dolu Birim" value={kpis.occupiedUnits ?? 0} max={kpis.totalUnits || 1} color="#10B981" />
+                    <PerformanceBar label="Bekleyen Tahsilat" value={kpis.pendingThisMonth ?? 0} max={kpis.monthlyExpected || 1} color="#F59E0B" />
+                    <PerformanceBar label="Geciken Tutar" value={kpis.overdueAmount ?? 0} max={kpis.monthlyExpected || 1} color="#EF4444" />
                 </Box>
 
                 {/* Recent Activity / Quick Actions */}
@@ -515,9 +492,9 @@ export default function Dashboard() {
 
                     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1.5 }}>
                         {[
-                            { icon: Apartment, label: 'Yeni İlan Ekle', color: '#C9A84C', path: '/properties' },
-                            { icon: PersonAdd, label: 'Müşteri Ekle', color: '#3B82F6', path: '/crm' },
-                            { icon: CalendarMonth, label: 'Randevu Oluştur', color: '#10B981', path: '/calendar' },
+                            { icon: Apartment, label: 'Mülk Ekle', color: '#C9A84C', path: '/properties' },
+                            { icon: PersonAdd, label: 'Kiracı Davet Et', color: '#3B82F6', path: '/messages' },
+                            { icon: CalendarMonth, label: 'Bakım Planla', color: '#10B981', path: '/maintenance' },
                             { icon: Handshake, label: 'Sözleşme Oluştur', color: '#8B5CF6', path: '/contracts' },
                         ].map((action) => (
                             <Box
@@ -558,15 +535,15 @@ export default function Dashboard() {
                         ))}
                     </Box>
 
-                    {/* Pipeline Summary */}
+                    {/* Unit Summary */}
                     <Box sx={{ mt: 2.5, pt: 2, borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                        <Typography sx={{ fontSize: 12, color: '#64748B', mb: 1.5 }}>Pipeline Özeti</Typography>
+                        <Typography sx={{ fontSize: 12, color: '#64748B', mb: 1.5 }}>Birim Özeti</Typography>
                         <Box sx={{ display: 'flex', gap: 0.5 }}>
                             {[
-                                { label: 'Yeni', count: leadStats?.byStage?.NEW ?? 0, color: '#3B82F6' },
-                                { label: 'İletişim', count: leadStats?.byStage?.CONTACTED ?? 0, color: '#06B6D4' },
-                                { label: 'Gösterim', count: leadStats?.byStage?.VIEWING_SCHEDULED ?? 0, color: '#F59E0B' },
-                                { label: 'Teklif', count: leadStats?.byStage?.OFFER_MADE ?? 0, color: '#8B5CF6' },
+                                { label: 'Dolu', count: unitStatus.occupied ?? 0, color: '#10B981' },
+                                { label: 'Boş', count: unitStatus.vacant ?? 0, color: '#3B82F6' },
+                                { label: 'Bakımda', count: unitStatus.maintenance ?? 0, color: '#F59E0B' },
+                                { label: 'Doluluk', count: `%${kpis.occupancyRate ?? 0}`, color: '#8B5CF6' },
                             ].map(s => (
                                 <Box key={s.label} sx={{ flex: 1, textAlign: 'center' }}>
                                     <Typography sx={{

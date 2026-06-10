@@ -356,10 +356,10 @@ export default function Properties() {
                         fontSize: { xs: 22, md: 26 }, fontWeight: 700,
                         fontFamily: "'Outfit', sans-serif", color: '#F1F5F9',
                     }}>
-                        İlanlar
+                        Mülkler & Birimler
                     </Typography>
                     <Typography sx={{ fontSize: 13, color: '#64748B' }}>
-                        Toplam {filteredProperties.length} ilan listeleniyor
+                        Toplam {filteredProperties.length} mülk kaydı listeleniyor
                     </Typography>
                 </Box>
 
@@ -374,7 +374,7 @@ export default function Properties() {
                     '&:hover': { background: 'linear-gradient(135deg, rgba(201, 168, 76, 0.15), rgba(201, 168, 76, 0.08))' }
                 }}>
                     <Add sx={{ fontSize: 18, color: '#C9A84C' }} />
-                    <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#C9A84C' }}>Yeni İlan</Typography>
+                    <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#C9A84C' }}>Yeni Mülk</Typography>
                 </Box>
             </Box>
 
@@ -399,7 +399,7 @@ export default function Properties() {
                 }}>
                     <Search sx={{ color: '#64748B', fontSize: 18 }} />
                     <InputBase
-                        placeholder="İlan veya lokasyon ara..."
+                        placeholder="Mülk, birim veya lokasyon ara..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         sx={{ flex: 1, color: '#F1F5F9', fontSize: 13, '& ::placeholder': { color: '#64748B', opacity: 1 } }}
@@ -430,7 +430,7 @@ export default function Properties() {
                     </Select>
                 </FormControl>
 
-                {/* Listing type */}
+                {/* Ownership type */}
                 <FormControl size="small">
                     <Select
                         value={filterListing}
@@ -445,7 +445,7 @@ export default function Properties() {
                             '& .MuiSvgIcon-root': { color: '#64748B' },
                         }}
                     >
-                        <MenuItem value="all">Satılık / Kiralık</MenuItem>
+                        <MenuItem value="all">Sahiplik / Kiralama</MenuItem>
                         <MenuItem value="sale">Satılık</MenuItem>
                         <MenuItem value="rent">Kiralık</MenuItem>
                     </Select>
@@ -548,10 +548,10 @@ export default function Properties() {
                 }}>
                     <Apartment sx={{ fontSize: 48, color: '#334155', mb: 2 }} />
                     <Typography sx={{ fontSize: 16, fontWeight: 600, color: '#94A3B8', mb: 1 }}>
-                        İlan bulunamadı
+                        Mülk kaydı bulunamadı
                     </Typography>
                     <Typography sx={{ fontSize: 13, color: '#64748B' }}>
-                        Filtrelerinizi değiştirmeyi veya yeni ilan eklemeyi deneyin.
+                        Filtrelerinizi değiştirmeyi veya yeni mülk eklemeyi deneyin.
                     </Typography>
                 </Box>
             )}
