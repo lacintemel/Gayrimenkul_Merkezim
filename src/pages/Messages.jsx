@@ -71,7 +71,10 @@ const Messages = () => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return conversations;
     return conversations.filter((conv) =>
-      conv.name?.toLowerCase().includes(query) || conv.lastMessage?.toLowerCase().includes(query)
+      conv.name?.toLowerCase().includes(query) ||
+      conv.lastMessage?.toLowerCase().includes(query) ||
+      conv.property?.title?.toLowerCase().includes(query) ||
+      conv.unit?.unitNumber?.toLowerCase().includes(query)
     );
   }, [conversations, searchQuery]);
 
@@ -211,6 +214,8 @@ const Messages = () => {
                     sx={{
                       px: 3,
                       py: 2,
+                      pb: 3.2,
+                      position: 'relative',
                       cursor: 'pointer',
                       background: selectedChatId === conv.id ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
                       borderLeft: selectedChatId === conv.id ? '3px solid #6366f1' : '3px solid transparent',
@@ -258,7 +263,7 @@ const Messages = () => {
                               whiteSpace: 'nowrap',
                             }}
                           >
-                            {conv.lastMessage}
+                          {conv.lastMessage}
                           </Typography>
                           {conv.unread > 0 && (
                             <Chip
@@ -276,6 +281,21 @@ const Messages = () => {
                         </Box>
                       }
                     />
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        position: 'absolute',
+                        left: 88,
+                        bottom: 8,
+                        color: 'rgba(148, 163, 184, 0.45)',
+                        maxWidth: '55%',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {conv.property?.title} {conv.unit?.unitNumber ? `· ${conv.unit.unitNumber}` : ''}
+                    </Typography>
                   </ListItem>
                   {index < filteredConversations.length - 1 && (
                     <Divider sx={{ borderColor: 'rgba(255,255,255,0.03)', mx: 3 }} />
@@ -321,6 +341,11 @@ const Messages = () => {
                     <Typography variant="caption" sx={{ color: selectedChat.online ? '#10b981' : 'rgba(148, 163, 184, 0.6)' }}>
                       {selectedChat.online ? 'Çevrimiçi' : 'Son görülme: Bugün'}
                     </Typography>
+                    {selectedChat.property && (
+                      <Typography variant="caption" sx={{ display: 'block', color: 'rgba(148, 163, 184, 0.55)' }}>
+                        {selectedChat.property.title} {selectedChat.unit?.unitNumber ? `· ${selectedChat.unit.unitNumber}` : ''}
+                      </Typography>
+                    )}
                   </Box>
                   <IconButton sx={{ color: 'rgba(148, 163, 184, 0.6)' }}>
                     <Phone />
