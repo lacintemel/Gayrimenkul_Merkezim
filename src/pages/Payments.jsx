@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box, Card, CardContent, Typography, Button, Chip, Avatar, Grid,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
@@ -10,25 +10,46 @@ import {
   CheckCircle, Schedule, Warning, Add, Download, FilterList,
   ArrowUpward, ArrowDownward
 } from '@mui/icons-material';
+import PaymentService from '../api/PaymentService';
 
-const payments = [
-  { id: 1, amount: 850, date: '01.12.2024', type: 'Aidat', status: 'Ödendi', method: 'Kredi Kartı' },
-  { id: 2, amount: 1200, date: '01.11.2024', type: 'Kira', status: 'Ödendi', method: 'Havale' },
-  { id: 3, amount: 150, date: '15.10.2024', type: 'Otopark', status: 'Bekliyor', method: '-' },
-  { id: 4, amount: 850, date: '01.10.2024', type: 'Aidat', status: 'Ödendi', method: 'Kredi Kartı' },
-  { id: 5, amount: 75, date: '20.09.2024', type: 'Ortak Gider', status: 'Ödendi', method: 'Havale' },
-];
+const formatCurrency = (value) => new Intl.NumberFormat('tr-TR', {
+  style: 'currency',
+  currency: 'TRY',
+  maximumFractionDigits: 0,
+}).format(value || 0);
 
-const summaryCards = [
-  { label: 'Bu Ay Ödenen', value: '₺2.050', icon: CheckCircle, color: '#10b981', trend: '+12%' },
-  { label: 'Bekleyen Ödeme', value: '₺150', icon: Schedule, color: '#f59e0b', trend: '-5%' },
-  { label: 'Toplam (Yıl)', value: '₺24.600', icon: TrendingUp, color: '#6366f1', trend: '+8%' },
-];
+const formatDate = (date) => new Intl.DateTimeFormat('tr-TR').format(new Date(date));
 
 const Payments = () => {
   const [tab, setTab] = useState(0);
   const [payDialog, setPayDialog] = useState(false);
+  const [payments, setPayments] = useState([]);
+  const [summary, setSummary] = useState({ thisMonth: 0, pending: 0, overdue: 0, total: 0 });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  useEffect(() => {
+    const fetchPayments = async () => {
+      try {
+        const [paymentsData, summaryData] = await Promise.all([
+          PaymentService.getPayments(),
+          PaymentService.getSummary(),
+        ]);
+        setPayments(paymentsData);
+        setSummary(summaryData);
+      } catch (err) {
+        console.error('Payments fetch error:', err);
+        setSnackbar({ open: true, message: 'Ödemeler yüklenemedi', severity: 'error' });
+      }
+    };
+
+    fetchPayments();
+  }, []);
+
+  const summaryCards = [
+    { label: 'Bu Ay Tahsil Edilen', value: formatCurrency(summary.thisMonth), icon: CheckCircle, color: '#10b981', trend: '+12%' },
+    { label: 'Bekleyen Ödeme', value: formatCurrency(summary.pending), icon: Schedule, color: '#f59e0b', trend: '-5%' },
+    { label: 'Geciken Tutar', value: formatCurrency(summary.overdue), icon: Warning, color: '#ef4444', trend: '+3%' },
+  ];
 
   const cardStyle = {
     background: 'rgba(30, 41, 59, 0.6)',
@@ -267,7 +288,7 @@ const Payments = () => {
               </TableHead>
               <TableBody>
                 {payments
-                  .filter(p => tab === 0 || (tab === 1 && p.status === 'Ödendi') || (tab === 2 && p.status === 'Bekliyor'))
+                  .filter(p => tab === 0 || (tab === 1 && ['Ödendi', 'Onaylandı'].includes(p.statusLabel)) || (tab === 2 && ['Bekliyor', 'Gecikmiş'].includes(p.statusLabel)))
                   .map((payment) => (
                     <TableRow
                       key={payment.id}
@@ -286,15 +307,20 @@ const Payments = () => {
                           }}>
                             <Receipt sx={{ fontSize: 18 }} />
                           </Avatar>
-                          <Typography sx={{ color: '#fff' }}>{payment.type}</Typography>
+                          <Box>
+                            <Typography sx={{ color: '#fff' }}>{payment.typeLabel}</Typography>
+                            <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.7)' }}>
+                              {payment.unit?.property?.title} · {payment.unit?.unitNumber}
+                            </Typography>
+                          </Box>
                         </Box>
                       </TableCell>
-                      <TableCell sx={{ color: 'rgba(148, 163, 184, 0.8)' }}>{payment.date}</TableCell>
-                      <TableCell sx={{ color: '#fff', fontWeight: 600 }}>₺{payment.amount}</TableCell>
-                      <TableCell sx={{ color: 'rgba(148, 163, 184, 0.8)' }}>{payment.method}</TableCell>
-                      <TableCell>{getStatusChip(payment.status)}</TableCell>
+                      <TableCell sx={{ color: 'rgba(148, 163, 184, 0.8)' }}>{formatDate(payment.date)}</TableCell>
+                      <TableCell sx={{ color: '#fff', fontWeight: 600 }}>{formatCurrency(payment.amount)}</TableCell>
+                      <TableCell sx={{ color: 'rgba(148, 163, 184, 0.8)' }}>{payment.methodLabel}</TableCell>
+                      <TableCell>{getStatusChip(payment.statusLabel)}</TableCell>
                       <TableCell>
-                        {payment.status === 'Bekliyor' ? (
+                        {['Bekliyor', 'Gecikmiş'].includes(payment.statusLabel) ? (
                           <Button
                             size="small"
                             variant="contained"
