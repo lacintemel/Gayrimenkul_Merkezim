@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box, Card, CardContent, Typography, Button, Chip, Avatar, Grid,
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions,
@@ -8,26 +8,25 @@ import {
 import {
   Description, Folder, PictureAsPdf, InsertDriveFile, Image,
   Download, Search, FilterList, MoreVert, Star, StarBorder,
-  CloudUpload, GridView, ViewList, Sort, Delete, Share, Visibility
+  CloudUpload, GridView, ViewList, Delete, Share, Visibility
 } from '@mui/icons-material';
+import documentService from '../api/DocumentService';
 
-const documents = [
-  { id: 1, name: 'Site Yönetim Planı 2024.pdf', type: 'pdf', size: '2.4 MB', date: '15 Kasım 2024', category: 'Yönetim', starred: true },
-  { id: 2, name: 'Aidat Tablosu Aralık.xlsx', type: 'excel', size: '156 KB', date: '1 Aralık 2024', category: 'Finans', starred: false },
-  { id: 3, name: 'Güvenlik Talimatları.pdf', type: 'pdf', size: '890 KB', date: '10 Ekim 2024', category: 'Güvenlik', starred: true },
-  { id: 4, name: 'Havuz Kuralları.pdf', type: 'pdf', size: '1.2 MB', date: '5 Haziran 2024', category: 'Ortak Alanlar', starred: false },
-  { id: 5, name: 'Yıllık Bütçe Raporu.xlsx', type: 'excel', size: '345 KB', date: '1 Ocak 2024', category: 'Finans', starred: false },
-  { id: 6, name: 'Acil Durum Planı.pdf', type: 'pdf', size: '567 KB', date: '20 Mart 2024', category: 'Güvenlik', starred: true },
-];
-
-const categories = ['Tümü', 'Yönetim', 'Finans', 'Güvenlik', 'Ortak Alanlar'];
+const formatDate = (date) => new Intl.DateTimeFormat('tr-TR', {
+  day: '2-digit',
+  month: 'long',
+  year: 'numeric',
+}).format(new Date(date));
 
 const Documents = () => {
   const [tab, setTab] = useState(0);
   const [viewMode, setViewMode] = useState('list');
   const [searchQuery, setSearchQuery] = useState('');
-  const [starred, setStarred] = useState(documents.filter(d => d.starred).map(d => d.id));
-  const [selectedCategory, setSelectedCategory] = useState('Tümü');
+  const [documents, setDocuments] = useState([]);
+  const [stats, setStats] = useState({ total: 0, starred: 0, totalSizeLabel: '0 MB' });
+  const [categories, setCategories] = useState([{ value: 'all', label: 'Tümü' }]);
+  const [starred, setStarred] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState('all');
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -42,27 +41,71 @@ const Documents = () => {
   };
 
   const getFileIcon = (type) => {
+    const normalized = ['CONTRACT', 'RECEIPT', 'REPORT', 'TITLE_DEED', 'INSURANCE'].includes(type)
+      ? 'pdf'
+      : type === 'INVOICE'
+        ? 'excel'
+        : type === 'PHOTO'
+          ? 'image'
+          : String(type || '').toLowerCase();
     const icons = {
       'pdf': { icon: <PictureAsPdf />, color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)' },
       'excel': { icon: <InsertDriveFile />, color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' },
       'image': { icon: <Image />, color: '#6366f1', bg: 'rgba(99, 102, 241, 0.15)' },
       'default': { icon: <Description />, color: '#94a3b8', bg: 'rgba(148, 163, 184, 0.15)' },
     };
-    return icons[type] || icons['default'];
+    return icons[normalized] || icons['default'];
   };
 
-  const toggleStar = (id) => {
-    if (starred.includes(id)) {
-      setStarred(starred.filter(s => s !== id));
-    } else {
-      setStarred([...starred, id]);
+  const fetchDocuments = async () => {
+    try {
+      const [documentsData, statsData, categoriesData] = await Promise.all([
+        documentService.getDocuments(),
+        documentService.getStats(),
+        documentService.getCategories(),
+      ]);
+      const data = documentsData.data || [];
+      setDocuments(data);
+      setStats(statsData);
+      setCategories([{ value: 'all', label: 'Tümü' }, ...categoriesData]);
+      setStarred(data.filter(d => d.isStarred).map(d => d.id));
+    } catch (err) {
+      console.error('Documents fetch error:', err);
+      setSnackbar({ open: true, message: 'Belgeler yüklenemedi', severity: 'error' });
+    }
+  };
+
+  useEffect(() => {
+    void Promise.resolve().then(fetchDocuments);
+  }, []);
+
+  const toggleStar = async (id) => {
+    const nextValue = !starred.includes(id);
+    setStarred(prev => nextValue ? [...prev, id] : prev.filter(s => s !== id));
+    setDocuments(prev => prev.map(doc => doc.id === id ? { ...doc, isStarred: nextValue } : doc));
+    try {
+      await documentService.toggleStar(id, nextValue);
+      const nextStats = await documentService.getStats();
+      setStats(nextStats);
+    } catch (err) {
+      console.error('Document star error:', err);
+      setSnackbar({ open: true, message: 'Yıldız durumu güncellenemedi', severity: 'error' });
     }
   };
 
   const filteredDocuments = documents
     .filter(d => tab === 0 || (tab === 1 && starred.includes(d.id)))
-    .filter(d => selectedCategory === 'Tümü' || d.category === selectedCategory)
-    .filter(d => d.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    .filter(d => selectedCategory === 'all' || d.type === selectedCategory)
+    .filter(d => {
+      const haystack = [
+        d.name,
+        d.typeLabel,
+        d.property?.title,
+        d.property?.address?.district,
+        d.tenancy?.unit?.unitNumber,
+      ].filter(Boolean).join(' ').toLowerCase();
+      return !searchQuery || haystack.includes(searchQuery.toLowerCase());
+    });
 
   return (
     <Box sx={{
@@ -92,7 +135,7 @@ const Documents = () => {
               Belgeler
             </Typography>
             <Typography sx={{ color: 'rgba(148, 163, 184, 0.8)' }}>
-              {documents.length} belge
+              {stats.total} belge · {stats.totalSizeLabel}
             </Typography>
           </Box>
         </Box>
@@ -121,17 +164,17 @@ const Documents = () => {
       <Box display="flex" gap={1} mb={3} flexWrap="wrap">
         {categories.map((cat) => (
           <Chip
-            key={cat}
-            label={cat}
-            onClick={() => setSelectedCategory(cat)}
+            key={cat.value}
+            label={cat.label}
+            onClick={() => setSelectedCategory(cat.value)}
             sx={{
-              background: selectedCategory === cat ? 'linear-gradient(135deg, #ec4899, #f43f5e)' : 'rgba(255,255,255,0.05)',
+              background: selectedCategory === cat.value ? 'linear-gradient(135deg, #ec4899, #f43f5e)' : 'rgba(255,255,255,0.05)',
               color: '#fff',
-              fontWeight: selectedCategory === cat ? 600 : 400,
+              fontWeight: selectedCategory === cat.value ? 600 : 400,
               cursor: 'pointer',
               transition: 'all 0.2s ease',
               '&:hover': {
-                background: selectedCategory === cat ? 'linear-gradient(135deg, #db2777, #e11d48)' : 'rgba(255,255,255,0.1)',
+                background: selectedCategory === cat.value ? 'linear-gradient(135deg, #db2777, #e11d48)' : 'rgba(255,255,255,0.1)',
               }
             }}
           />
@@ -245,10 +288,10 @@ const Documents = () => {
                         secondary={
                           <Box display="flex" alignItems="center" gap={2}>
                             <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.6)' }}>
-                              {doc.size} • {doc.date}
+                              {doc.sizeLabel} • {formatDate(doc.createdAt)}
                             </Typography>
                             <Chip
-                              label={doc.category}
+                              label={doc.typeLabel}
                               size="small"
                               sx={{
                                 height: 20,
@@ -335,7 +378,7 @@ const Documents = () => {
                         {doc.name}
                       </Typography>
                       <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.6)' }}>
-                        {doc.size}
+                        {doc.sizeLabel}
                       </Typography>
                     </Card>
                   </Grid>
@@ -464,13 +507,13 @@ const Documents = () => {
               </Box>
               <Box display="flex" gap={2} mt={2}>
                 <Typography variant="body2" sx={{ color: 'rgba(148, 163, 184, 0.6)' }}>
-                  Boyut: {previewOpen.size}
+                  Boyut: {previewOpen.sizeLabel}
                 </Typography>
                 <Typography variant="body2" sx={{ color: 'rgba(148, 163, 184, 0.6)' }}>
-                  Tarih: {previewOpen.date}
+                  Tarih: {formatDate(previewOpen.createdAt)}
                 </Typography>
                 <Typography variant="body2" sx={{ color: 'rgba(148, 163, 184, 0.6)' }}>
-                  Kategori: {previewOpen.category}
+                  Kategori: {previewOpen.typeLabel}
                 </Typography>
               </Box>
             </DialogContent>

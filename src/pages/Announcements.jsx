@@ -1,73 +1,101 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Box, Card, CardContent, Typography, Button, Chip, Avatar, Grid,
-  IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Tabs, Tab,
-  List, ListItem, ListItemAvatar, ListItemText, Divider, Tooltip,
-  TextField, InputAdornment, Badge, Collapse, Snackbar, Alert
+  Alert,
+  Avatar,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  FormControl,
+  Grid,
+  IconButton,
+  InputAdornment,
+  InputLabel,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
+  MenuItem,
+  Select,
+  Snackbar,
+  Tab,
+  Tabs,
+  TextField,
+  Tooltip,
+  Typography,
 } from '@mui/material';
 import {
-  Notifications, PushPin, Star, StarBorder, Search, FilterList,
-  Schedule, ExpandMore, ExpandLess, AttachFile, Comment, Share,
-  Campaign, Info, Warning, Event, Close, Add
+  Add,
+  AttachFile,
+  Campaign,
+  Close,
+  Comment,
+  Event,
+  FilterList,
+  Info,
+  PushPin,
+  Search,
+  Share,
+  Star,
+  StarBorder,
+  Warning,
 } from '@mui/icons-material';
+import announcementService from '../api/AnnouncementService';
+import PropertyService from '../api/PropertyService';
 
-const announcements = [
-  {
-    id: 1,
-    title: 'Havuz Bakımı Duyurusu',
-    content: 'Değerli sakinlerimiz, 1-3 Aralık tarihleri arasında yıllık bakım çalışmaları nedeniyle havuz kapalı olacaktır. Anlayışınız için teşekkür ederiz.',
-    date: '28 Kasım 2024',
-    type: 'warning',
-    pinned: true,
-    starred: true,
-    author: 'Yönetim',
-    comments: 5,
-    attachments: 1,
-  },
-  {
-    id: 2,
-    title: 'Yeni Yıl Etkinliği',
-    content: 'Yeni yıl kutlaması 31 Aralık akşamı ortak alanda düzenlenecektir. Tüm sakinlerimiz davetlidir!',
-    date: '25 Kasım 2024',
-    type: 'event',
-    pinned: false,
-    starred: false,
-    author: 'Sosyal Komite',
-    comments: 12,
-    attachments: 0,
-  },
-  {
-    id: 3,
-    title: 'Aidat Artışı Hakkında',
-    content: '2025 yılı için aidat tutarları %15 oranında artırılmıştır. Detaylı bilgi için yönetim ofisini ziyaret edebilirsiniz.',
-    date: '20 Kasım 2024',
-    type: 'info',
-    pinned: false,
-    starred: true,
-    author: 'Yönetim',
-    comments: 23,
-    attachments: 2,
-  },
-  {
-    id: 4,
-    title: 'Asansör Bakımı',
-    content: 'A Blok asansörü 30 Kasım Cumartesi günü 09:00-17:00 saatleri arasında bakıma alınacaktır.',
-    date: '18 Kasım 2024',
-    type: 'warning',
-    pinned: false,
-    starred: false,
-    author: 'Teknik Ekip',
-    comments: 3,
-    attachments: 0,
-  },
-];
+const typeConfig = {
+  GENERAL: { color: '#6366f1', bg: 'rgba(99, 102, 241, 0.15)', icon: Info, label: 'Genel' },
+  MAINTENANCE: { color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)', icon: Warning, label: 'Bakım' },
+  MEETING: { color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)', icon: Event, label: 'Toplantı' },
+  EMERGENCY: { color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)', icon: Warning, label: 'Acil' },
+  FINANCIAL: { color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)', icon: Info, label: 'Mali' },
+  RULE_CHANGE: { color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.15)', icon: Campaign, label: 'Kural' },
+};
+
+const priorityLabels = {
+  LOW: 'Düşük',
+  MEDIUM: 'Normal',
+  HIGH: 'Yüksek',
+  URGENT: 'Acil',
+};
+
+const roleLabels = {
+  tenant: 'Kiracı',
+  property_owner: 'Mülk Sahibi',
+  building_manager: 'Yönetici',
+  management_company: 'Yönetim Şirketi',
+};
+
+const formatDate = (date) => new Intl.DateTimeFormat('tr-TR', {
+  day: '2-digit',
+  month: 'long',
+  year: 'numeric',
+}).format(new Date(date));
 
 const Announcements = () => {
   const [tab, setTab] = useState(0);
-  const [expandedId, setExpandedId] = useState(null);
-  const [starred, setStarred] = useState(announcements.filter(a => a.starred).map(a => a.id));
+  const [announcements, setAnnouncements] = useState([]);
+  const [properties, setProperties] = useState([]);
+  const [stats, setStats] = useState({ total: 0, active: 0, pinned: 0, unread: 0, urgent: 0 });
+  const [starred, setStarred] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [detailOpen, setDetailOpen] = useState(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newAnnouncement, setNewAnnouncement] = useState({
+    propertyId: '',
+    title: '',
+    content: '',
+    type: 'GENERAL',
+    priority: 'MEDIUM',
+    pinned: false,
+  });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   const cardStyle = {
@@ -77,26 +105,78 @@ const Announcements = () => {
     borderRadius: 3,
   };
 
-  const getTypeConfig = (type) => {
-    const config = {
-      'warning': { color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)', icon: <Warning />, label: 'Uyarı' },
-      'info': { color: '#6366f1', bg: 'rgba(99, 102, 241, 0.15)', icon: <Info />, label: 'Bilgi' },
-      'event': { color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)', icon: <Event />, label: 'Etkinlik' },
-    };
-    return config[type] || config['info'];
-  };
-
-  const toggleStar = (id) => {
-    if (starred.includes(id)) {
-      setStarred(starred.filter(s => s !== id));
-    } else {
-      setStarred([...starred, id]);
+  const fetchData = async () => {
+    try {
+      const [announcementData, statsData, propertyData] = await Promise.all([
+        announcementService.getAnnouncements(),
+        announcementService.getStats(),
+        PropertyService.getAll(),
+      ]);
+      const data = announcementData.data || [];
+      setAnnouncements(data);
+      setStats(statsData);
+      setProperties(propertyData.data || []);
+      setStarred(prev => prev.length ? prev : data.filter(item => item.pinned).map(item => item.id));
+    } catch (err) {
+      console.error('Announcements fetch error:', err);
+      setSnackbar({ open: true, message: 'Duyurular yüklenemedi', severity: 'error' });
     }
   };
 
-  const filteredAnnouncements = announcements
-    .filter(a => tab === 0 || (tab === 1 && a.pinned) || (tab === 2 && starred.includes(a.id)))
-    .filter(a => a.title.toLowerCase().includes(searchQuery.toLowerCase()));
+  useEffect(() => {
+    void Promise.resolve().then(fetchData);
+  }, []);
+
+  const filteredAnnouncements = useMemo(() => announcements
+    .filter(item => tab === 0 || (tab === 1 && item.pinned) || (tab === 2 && starred.includes(item.id)) || (tab === 3 && !(item.readBy || []).includes('user-5')))
+    .filter(item => typeFilter === 'all' || item.type === typeFilter)
+    .filter(item => {
+      const haystack = [
+        item.title,
+        item.content,
+        item.property?.title,
+        item.property?.address?.district,
+      ].filter(Boolean).join(' ').toLowerCase();
+      return !searchQuery || haystack.includes(searchQuery.toLowerCase());
+    }), [announcements, searchQuery, starred, tab, typeFilter]);
+
+  const toggleStar = (id) => {
+    setStarred(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
+  };
+
+  const markRead = async (announcement) => {
+    try {
+      const updated = await announcementService.markRead(announcement.id, { userId: 'user-5' });
+      setAnnouncements(prev => prev.map(item => item.id === updated.id ? updated : item));
+      setDetailOpen(updated);
+    } catch (err) {
+      console.error('Mark announcement read error:', err);
+    }
+  };
+
+  const handleCreate = async () => {
+    try {
+      await announcementService.createAnnouncement(newAnnouncement);
+      setCreateOpen(false);
+      setNewAnnouncement({ propertyId: '', title: '', content: '', type: 'GENERAL', priority: 'MEDIUM', pinned: false });
+      setSnackbar({ open: true, message: 'Duyuru yayınlandı', severity: 'success' });
+      fetchData();
+    } catch (err) {
+      console.error('Create announcement error:', err);
+      setSnackbar({ open: true, message: 'Duyuru oluşturulamadı', severity: 'error' });
+    }
+  };
+
+  const renderTypeChip = (type) => {
+    const cfg = typeConfig[type] || typeConfig.GENERAL;
+    return (
+      <Chip
+        label={cfg.label}
+        size="small"
+        sx={{ height: 22, fontSize: 11, background: cfg.bg, color: cfg.color, fontWeight: 700 }}
+      />
+    );
+  };
 
   return (
     <Box sx={{
@@ -105,8 +185,7 @@ const Announcements = () => {
       py: 4,
       px: { xs: 2, md: 4 },
     }}>
-      {/* Header */}
-      <Box display="flex" alignItems="center" justifyContent="space-between" mb={4}>
+      <Box display="flex" alignItems="center" justifyContent="space-between" mb={4} gap={2} flexWrap="wrap">
         <Box display="flex" alignItems="center" gap={2}>
           <Avatar sx={{
             width: 56,
@@ -126,20 +205,33 @@ const Announcements = () => {
               Duyurular
             </Typography>
             <Typography sx={{ color: 'rgba(148, 163, 184, 0.8)' }}>
-              {announcements.length} duyuru
+              {stats.active} aktif duyuru · {stats.unread} okunmamış
             </Typography>
           </Box>
         </Box>
+        <Button
+          variant="contained"
+          startIcon={<Add />}
+          onClick={() => setCreateOpen(true)}
+          sx={{
+            textTransform: 'none',
+            fontWeight: 700,
+            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+            boxShadow: '0 8px 20px rgba(99, 102, 241, 0.3)',
+          }}
+        >
+          Yeni Duyuru
+        </Button>
       </Box>
 
-      {/* Stats */}
       <Grid container spacing={2} sx={{ mb: 4 }}>
         {[
-          { label: 'Toplam', count: announcements.length, color: '#6366f1' },
-          { label: 'Sabitlenmiş', count: announcements.filter(a => a.pinned).length, color: '#f59e0b' },
-          { label: 'Yıldızlı', count: starred.length, color: '#ec4899' },
+          { label: 'Toplam', count: stats.total, color: '#6366f1' },
+          { label: 'Sabitlenmiş', count: stats.pinned, color: '#f59e0b' },
+          { label: 'Okunmamış', count: stats.unread, color: '#ef4444' },
+          { label: 'Önemli', count: stats.urgent, color: '#10b981' },
         ].map((stat) => (
-          <Grid item xs={4} key={stat.label}>
+          <Grid item xs={6} md={3} key={stat.label}>
             <Card sx={{ ...cardStyle, p: 2, textAlign: 'center' }}>
               <Typography variant="h3" sx={{ color: stat.color, fontWeight: 700 }}>
                 {stat.count}
@@ -152,15 +244,16 @@ const Announcements = () => {
         ))}
       </Grid>
 
-      {/* Search & Filter */}
-      <Box display="flex" gap={2} mb={3}>
+      <Box display="flex" gap={2} mb={3} flexWrap="wrap">
         <TextField
-          placeholder="Duyuru ara..."
+          placeholder="Duyuru, mülk veya lokasyon ara..."
           fullWidth
           size="small"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           sx={{
+            flex: 1,
+            minWidth: 260,
             '& .MuiOutlinedInput-root': {
               background: 'rgba(30, 41, 59, 0.6)',
               borderRadius: 2,
@@ -174,9 +267,29 @@ const Announcements = () => {
               <InputAdornment position="start">
                 <Search sx={{ color: 'rgba(148, 163, 184, 0.6)' }} />
               </InputAdornment>
-            )
+            ),
           }}
         />
+        <FormControl size="small">
+          <Select
+            value={typeFilter}
+            onChange={(event) => setTypeFilter(event.target.value)}
+            sx={{
+              minWidth: 150,
+              height: 40,
+              color: '#F1F5F9',
+              background: 'rgba(30, 41, 59, 0.6)',
+              borderRadius: 2,
+              '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.08)' },
+              '& .MuiSvgIcon-root': { color: '#64748B' },
+            }}
+          >
+            <MenuItem value="all">Tüm Türler</MenuItem>
+            {Object.entries(typeConfig).map(([value, config]) => (
+              <MenuItem key={value} value={value}>{config.label}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
         <Tooltip title="Filtrele">
           <IconButton sx={{
             background: 'rgba(30, 41, 59, 0.6)',
@@ -188,7 +301,6 @@ const Announcements = () => {
         </Tooltip>
       </Box>
 
-      {/* Tabs & List */}
       <Card sx={cardStyle}>
         <CardContent sx={{ p: 3 }}>
           <Tabs
@@ -204,18 +316,23 @@ const Announcements = () => {
             <Tab label="Tümü" />
             <Tab label="Sabitlenmiş" icon={<PushPin sx={{ fontSize: 16 }} />} iconPosition="start" />
             <Tab label="Yıldızlı" icon={<Star sx={{ fontSize: 16 }} />} iconPosition="start" />
+            <Tab label="Okunmamış" />
           </Tabs>
 
           <List sx={{ p: 0 }}>
             {filteredAnnouncements.map((announcement, index) => {
-              const typeCfg = getTypeConfig(announcement.type);
-              const isExpanded = expandedId === announcement.id;
+              const cfg = typeConfig[announcement.type] || typeConfig.GENERAL;
+              const Icon = cfg.icon;
+              const isUnread = !(announcement.readBy || []).includes('user-5');
 
               return (
                 <React.Fragment key={announcement.id}>
                   <ListItem
                     alignItems="flex-start"
-                    onClick={() => setDetailOpen(announcement)}
+                    onClick={() => {
+                      setDetailOpen(announcement);
+                      if (isUnread) markRead(announcement);
+                    }}
                     sx={{
                       px: 2,
                       py: 2,
@@ -224,38 +341,23 @@ const Announcements = () => {
                       borderLeft: announcement.pinned ? '3px solid #f59e0b' : '3px solid transparent',
                       cursor: 'pointer',
                       transition: 'all 0.2s ease',
-                      '&:hover': { background: 'rgba(255,255,255,0.03)' }
+                      '&:hover': { background: 'rgba(255,255,255,0.03)' },
                     }}
                   >
                     <ListItemAvatar>
-                      <Avatar sx={{
-                        width: 48,
-                        height: 48,
-                        background: typeCfg.bg,
-                        color: typeCfg.color,
-                      }}>
-                        {typeCfg.icon}
+                      <Avatar sx={{ width: 48, height: 48, background: cfg.bg, color: cfg.color }}>
+                        <Icon />
                       </Avatar>
                     </ListItemAvatar>
                     <ListItemText
                       primary={
-                        <Box display="flex" alignItems="center" gap={1} mb={0.5}>
-                          {announcement.pinned && (
-                            <PushPin sx={{ fontSize: 14, color: '#f59e0b' }} />
-                          )}
+                        <Box display="flex" alignItems="center" gap={1} mb={0.5} flexWrap="wrap">
+                          {announcement.pinned && <PushPin sx={{ fontSize: 14, color: '#f59e0b' }} />}
+                          {isUnread && <Box sx={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444' }} />}
                           <Typography sx={{ color: '#fff', fontWeight: 600, flex: 1 }}>
                             {announcement.title}
                           </Typography>
-                          <Chip
-                            label={typeCfg.label}
-                            size="small"
-                            sx={{
-                              height: 22,
-                              fontSize: 11,
-                              background: typeCfg.bg,
-                              color: typeCfg.color,
-                            }}
-                          />
+                          {renderTypeChip(announcement.type)}
                         </Box>
                       }
                       secondary={
@@ -265,51 +367,38 @@ const Announcements = () => {
                             sx={{
                               color: 'rgba(148, 163, 184, 0.8)',
                               display: '-webkit-box',
-                              WebkitLineClamp: isExpanded ? 'unset' : 2,
+                              WebkitLineClamp: 2,
                               WebkitBoxOrient: 'vertical',
                               overflow: 'hidden',
                             }}
                           >
                             {announcement.content}
                           </Typography>
-                          <Box display="flex" alignItems="center" gap={2} mt={1}>
+                          <Box display="flex" alignItems="center" gap={2} mt={1} flexWrap="wrap">
                             <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.5)' }}>
-                              {announcement.author} • {announcement.date}
+                              {announcement.property?.title} · {formatDate(announcement.createdAt)}
                             </Typography>
                             <Box display="flex" alignItems="center" gap={0.5}>
                               <Comment sx={{ fontSize: 14, color: 'rgba(148, 163, 184, 0.4)' }} />
-                              <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.5)' }}>
-                                {announcement.comments}
-                              </Typography>
+                              <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.5)' }}>{announcement.comments}</Typography>
                             </Box>
                             {announcement.attachments > 0 && (
                               <Box display="flex" alignItems="center" gap={0.5}>
                                 <AttachFile sx={{ fontSize: 14, color: 'rgba(148, 163, 184, 0.4)' }} />
-                                <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.5)' }}>
-                                  {announcement.attachments}
-                                </Typography>
+                                <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.5)' }}>{announcement.attachments}</Typography>
                               </Box>
                             )}
                           </Box>
                         </>
                       }
                     />
-                    <Box display="flex" flexDirection="column" alignItems="center" gap={0.5}>
-                      <IconButton
-                        size="small"
-                        onClick={(e) => { e.stopPropagation(); toggleStar(announcement.id); }}
-                        sx={{ color: starred.includes(announcement.id) ? '#f59e0b' : 'rgba(148, 163, 184, 0.6)' }}
-                      >
-                        {starred.includes(announcement.id) ? <Star /> : <StarBorder />}
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        onClick={(e) => { e.stopPropagation(); setExpandedId(isExpanded ? null : announcement.id); }}
-                        sx={{ color: 'rgba(148, 163, 184, 0.6)' }}
-                      >
-                        {isExpanded ? <ExpandLess /> : <ExpandMore />}
-                      </IconButton>
-                    </Box>
+                    <IconButton
+                      size="small"
+                      onClick={(e) => { e.stopPropagation(); toggleStar(announcement.id); }}
+                      sx={{ color: starred.includes(announcement.id) ? '#f59e0b' : 'rgba(148, 163, 184, 0.6)' }}
+                    >
+                      {starred.includes(announcement.id) ? <Star /> : <StarBorder />}
+                    </IconButton>
                   </ListItem>
                   {index < filteredAnnouncements.length - 1 && (
                     <Divider sx={{ borderColor: 'rgba(255,255,255,0.03)' }} />
@@ -332,7 +421,7 @@ const Announcements = () => {
             backdropFilter: 'blur(20px)',
             border: '1px solid rgba(255,255,255,0.1)',
             borderRadius: 3,
-          }
+          },
         }}
       >
         {detailOpen && (
@@ -347,19 +436,22 @@ const Announcements = () => {
               </IconButton>
             </DialogTitle>
             <DialogContent>
-              <Chip
-                label={getTypeConfig(detailOpen.type).label}
-                sx={{
-                  mb: 2,
-                  background: getTypeConfig(detailOpen.type).bg,
-                  color: getTypeConfig(detailOpen.type).color,
-                }}
-              />
+              <Box display="flex" gap={1} mb={2} flexWrap="wrap">
+                {renderTypeChip(detailOpen.type)}
+                <Chip
+                  label={priorityLabels[detailOpen.priority] || detailOpen.priority}
+                  size="small"
+                  sx={{ background: 'rgba(255,255,255,0.08)', color: '#E2E8F0' }}
+                />
+              </Box>
               <Typography sx={{ color: 'rgba(226, 232, 240, 0.92)', mb: 3 }}>
                 {detailOpen.content}
               </Typography>
+              <Typography variant="body2" sx={{ color: '#94A3B8', mb: 1 }}>
+                {detailOpen.property?.title}
+              </Typography>
               <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.7)' }}>
-                {detailOpen.author} • {detailOpen.date}
+                Hedef: {(detailOpen.targetRoles || []).map(role => roleLabels[role] || role).join(', ')}
               </Typography>
             </DialogContent>
             <DialogActions sx={{ p: 3, pt: 0 }}>
@@ -379,6 +471,116 @@ const Announcements = () => {
             </DialogActions>
           </>
         )}
+      </Dialog>
+
+      <Dialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            background: 'rgba(30, 41, 59, 0.95)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 3,
+          },
+        }}
+      >
+        <DialogTitle sx={{ color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          Yeni Duyuru
+          <IconButton onClick={() => setCreateOpen(false)} sx={{ color: 'rgba(148, 163, 184, 0.7)' }}>
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <FormControl fullWidth margin="normal">
+            <InputLabel sx={{ color: 'rgba(148, 163, 184, 0.8)' }}>Mülk</InputLabel>
+            <Select
+              label="Mülk"
+              value={newAnnouncement.propertyId}
+              onChange={(event) => setNewAnnouncement(prev => ({ ...prev, propertyId: event.target.value }))}
+              sx={{
+                color: '#fff',
+                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' },
+                '& .MuiSelect-icon': { color: 'rgba(148, 163, 184, 0.6)' },
+              }}
+            >
+              {properties.map(property => (
+                <MenuItem key={property.id} value={property.id}>{property.title}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField
+            label="Başlık"
+            fullWidth
+            margin="normal"
+            value={newAnnouncement.title}
+            onChange={(event) => setNewAnnouncement(prev => ({ ...prev, title: event.target.value }))}
+            sx={{
+              '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' } },
+              '& .MuiInputLabel-root': { color: 'rgba(148, 163, 184, 0.8)' },
+            }}
+          />
+          <TextField
+            label="Tür"
+            select
+            fullWidth
+            margin="normal"
+            value={newAnnouncement.type}
+            onChange={(event) => setNewAnnouncement(prev => ({ ...prev, type: event.target.value }))}
+            sx={{
+              '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' } },
+              '& .MuiInputLabel-root': { color: 'rgba(148, 163, 184, 0.8)' },
+            }}
+          >
+            {Object.entries(typeConfig).map(([value, config]) => (
+              <MenuItem key={value} value={value}>{config.label}</MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            label="Öncelik"
+            select
+            fullWidth
+            margin="normal"
+            value={newAnnouncement.priority}
+            onChange={(event) => setNewAnnouncement(prev => ({ ...prev, priority: event.target.value }))}
+            sx={{
+              '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' } },
+              '& .MuiInputLabel-root': { color: 'rgba(148, 163, 184, 0.8)' },
+            }}
+          >
+            {Object.entries(priorityLabels).map(([value, label]) => (
+              <MenuItem key={value} value={value}>{label}</MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            label="İçerik"
+            fullWidth
+            multiline
+            rows={5}
+            margin="normal"
+            value={newAnnouncement.content}
+            onChange={(event) => setNewAnnouncement(prev => ({ ...prev, content: event.target.value }))}
+            sx={{
+              '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' } },
+              '& .MuiInputLabel-root': { color: 'rgba(148, 163, 184, 0.8)' },
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={() => setCreateOpen(false)} sx={{ color: 'rgba(148, 163, 184, 0.8)' }}>
+            İptal
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleCreate}
+            disabled={!newAnnouncement.propertyId || !newAnnouncement.title || !newAnnouncement.content}
+            sx={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
+          >
+            Yayınla
+          </Button>
+        </DialogActions>
       </Dialog>
 
       <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar(s => ({ ...s, open: false }))}>

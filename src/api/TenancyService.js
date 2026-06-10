@@ -13,6 +13,8 @@ const TenancyService = {
 
     getStats: () => apiClient.get('/tenancies/stats').then(r => r.data),
 
+    create: (payload) => apiClient.post('/tenancies', payload).then(r => r.data),
+
     terminate: (id, payload) => apiClient.patch(`/tenancies/${id}/terminate`, payload).then(r => r.data),
 };
 
