@@ -23,27 +23,42 @@ const formatDate = (date) => new Intl.DateTimeFormat('tr-TR').format(new Date(da
 const Payments = () => {
   const [tab, setTab] = useState(0);
   const [payDialog, setPayDialog] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState(null);
   const [payments, setPayments] = useState([]);
   const [summary, setSummary] = useState({ thisMonth: 0, pending: 0, overdue: 0, total: 0 });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
-  useEffect(() => {
-    const fetchPayments = async () => {
-      try {
-        const [paymentsData, summaryData] = await Promise.all([
-          PaymentService.getPayments(),
-          PaymentService.getSummary(),
-        ]);
-        setPayments(paymentsData);
-        setSummary(summaryData);
-      } catch (err) {
-        console.error('Payments fetch error:', err);
-        setSnackbar({ open: true, message: 'Ödemeler yüklenemedi', severity: 'error' });
-      }
-    };
+  const fetchPayments = async () => {
+    try {
+      const [paymentsData, summaryData] = await Promise.all([
+        PaymentService.getPayments(),
+        PaymentService.getSummary(),
+      ]);
+      setPayments(paymentsData);
+      setSummary(summaryData);
+    } catch (err) {
+      console.error('Payments fetch error:', err);
+      setSnackbar({ open: true, message: 'Ödemeler yüklenemedi', severity: 'error' });
+    }
+  };
 
-    fetchPayments();
+  useEffect(() => {
+    void Promise.resolve().then(fetchPayments);
   }, []);
+
+  const handlePayPayment = async () => {
+    if (!selectedPayment) return;
+    try {
+      await PaymentService.payPayment(selectedPayment.id, { method: 'CREDIT_CARD', verify: true });
+      setPayDialog(false);
+      setSelectedPayment(null);
+      setSnackbar({ open: true, message: 'Ödeme başarıyla kaydedildi', severity: 'success' });
+      fetchPayments();
+    } catch (err) {
+      console.error('Payment update error:', err);
+      setSnackbar({ open: true, message: 'Ödeme kaydedilemedi', severity: 'error' });
+    }
+  };
 
   const summaryCards = [
     { label: 'Bu Ay Tahsil Edilen', value: formatCurrency(summary.thisMonth), icon: CheckCircle, color: '#10b981', trend: '+12%' },
@@ -115,7 +130,11 @@ const Payments = () => {
         <Button
           variant="contained"
           startIcon={<Add />}
-          onClick={() => setPayDialog(true)}
+          onClick={() => {
+            const payable = payments.find(payment => ['Bekliyor', 'Gecikmiş'].includes(payment.statusLabel));
+            setSelectedPayment(payable || null);
+            setPayDialog(true);
+          }}
           sx={{
             background: 'linear-gradient(135deg, #10b981, #059669)',
             textTransform: 'none',
@@ -324,6 +343,10 @@ const Payments = () => {
                           <Button
                             size="small"
                             variant="contained"
+                            onClick={() => {
+                              setSelectedPayment(payment);
+                              setPayDialog(true);
+                            }}
                             sx={{
                               background: 'linear-gradient(135deg, #10b981, #059669)',
                               textTransform: 'none',
@@ -367,8 +390,12 @@ const Payments = () => {
         <DialogContent>
           <Box sx={{ mb: 3, p: 2, borderRadius: 2, background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
             <Typography variant="body2" sx={{ color: '#10b981', mb: 1 }}>Bekleyen Ödeme</Typography>
-            <Typography variant="h4" sx={{ color: '#fff', fontWeight: 700 }}>₺150</Typography>
-            <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.7)' }}>Otopark Ücreti</Typography>
+            <Typography variant="h4" sx={{ color: '#fff', fontWeight: 700 }}>
+              {formatCurrency(selectedPayment?.amount || summary.pending || summary.overdue)}
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.7)' }}>
+              {selectedPayment ? `${selectedPayment.typeLabel} · ${selectedPayment.unit?.unitNumber || ''}` : 'Bekleyen ödeme'}
+            </Typography>
           </Box>
           <TextField
             label="Kart Numarası"
@@ -417,16 +444,13 @@ const Payments = () => {
           </Button>
           <Button
             variant="contained"
-            onClick={() => {
-              setPayDialog(false);
-              setSnackbar({ open: true, message: 'Ödeme başarıyla tamamlandı!', severity: 'success' });
-            }}
+            onClick={handlePayPayment}
             sx={{
               background: 'linear-gradient(135deg, #10b981, #059669)',
               px: 4,
             }}
           >
-            ₺150 Öde
+            {formatCurrency(selectedPayment?.amount || summary.pending || summary.overdue)} Öde
           </Button>
         </DialogActions>
       </Dialog>
