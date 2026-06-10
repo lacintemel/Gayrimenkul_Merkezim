@@ -6,9 +6,9 @@ import {
   Menu, MenuItem, Divider, useMediaQuery, useTheme, InputBase
 } from '@mui/material';
 import {
-  Dashboard, Apartment, People, CalendarMonth, Description,
+  Dashboard, Apartment, Payment as PaymentIcon, Build, Campaign, Description,
   Message, Person, BarChart, Settings, Menu as MenuIcon,
-  Notifications, LogoutSharp, ChevronLeft, Search, TrendingUp
+  Notifications, LogoutSharp, ChevronLeft, Search
 } from '@mui/icons-material';
 import { useAuthStore } from '../store/authStore';
 
@@ -17,13 +17,27 @@ const collapsedWidth = 72;
 
 const menuItems = [
   { path: '/', label: 'Dashboard', icon: Dashboard, section: 'main' },
-  { path: '/properties', label: 'İlanlar', icon: Apartment, badge: 6, section: 'main' },
-  { path: '/crm', label: 'CRM / Müşteriler', icon: People, badge: 3, section: 'main' },
-  { path: '/calendar', label: 'Takvim', icon: CalendarMonth, section: 'main' },
+  { path: '/properties', label: 'Mülkler & Birimler', icon: Apartment, badge: 6, section: 'main' },
+  { path: '/payments', label: 'Kira & Aidat', icon: PaymentIcon, badge: 2, section: 'main' },
+  { path: '/maintenance', label: 'Bakım Talepleri', icon: Build, badge: 3, section: 'main' },
+  { path: '/announcements', label: 'Duyurular', icon: Campaign, section: 'main' },
   { path: '/contracts', label: 'Sözleşmeler', icon: Description, section: 'main' },
+  { path: '/documents', label: 'Belgeler', icon: Description, section: 'main' },
   { path: '/messages', label: 'Mesajlar', icon: Message, badge: 5, section: 'communication' },
-  { path: '/analytics', label: 'Analitik', icon: BarChart, section: 'communication' },
+  { path: '/analytics', label: 'Raporlar', icon: BarChart, section: 'communication' },
 ];
+
+const roleLabels = {
+  platform_admin: 'Platform Yöneticisi',
+  property_owner: 'Mülk Sahibi',
+  building_manager: 'Bina/Site Yöneticisi',
+  tenant: 'Kiracı',
+  management_company: 'Yönetim Şirketi',
+  super_admin: 'Platform Yöneticisi',
+  agency_manager: 'Bina/Site Yöneticisi',
+  agent: 'Mülk Sorumlusu',
+  public_user: 'Kiracı',
+};
 
 const MainLayout = ({ children }) => {
   const location = useLocation();
@@ -50,10 +64,7 @@ const MainLayout = ({ children }) => {
   const userName = user
     ? `${user.firstName || user.name || 'User'} ${user.lastName || ''}`
     : 'User';
-  const userRole = user?.role === 'agent' ? 'Emlak Danışmanı'
-    : user?.role === 'agency_manager' ? 'Ofis Yöneticisi'
-      : user?.role === 'super_admin' ? 'Süper Admin'
-        : 'Kullanıcı';
+  const userRole = roleLabels[user?.role] || 'Kullanıcı';
 
   const drawer = (
     <Box sx={{
@@ -379,7 +390,7 @@ const MainLayout = ({ children }) => {
             }}>
               <Search sx={{ color: '#64748B', fontSize: 18 }} />
               <InputBase
-                placeholder="İlan, müşteri veya referans kodu ara..."
+                placeholder="Mülk, kiracı, ödeme veya belge ara..."
                 sx={{
                   flex: 1,
                   color: '#F1F5F9',
